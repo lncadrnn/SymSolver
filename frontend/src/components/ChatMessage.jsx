@@ -61,7 +61,7 @@ function ExplanationPanel({ explanation, visible }) {
 function StepCard({ step, index, animate, onDone, onScrollNeeded }) {
   const [phase, setPhase] = useState(animate ? 'typing-desc' : 'done')
   // phases: typing-desc -> typing-expr -> done
-  const [showExplanation, setShowExplanation] = useState(false)
+  const [showExplanation, setShowExplanation] = useState(true)
   const cardRef = useRef(null)
 
   const scroll = useCallback(() => {
@@ -70,7 +70,7 @@ function StepCard({ step, index, animate, onDone, onScrollNeeded }) {
     }
   }, [onScrollNeeded])
 
-  useEffect(() => { scroll() }, [phase, showExplanation])
+  useEffect(() => { scroll() }, [phase])
 
   const lines = step.expression
     ? step.expression.split('\n').filter((l) => l.trim())
@@ -126,7 +126,7 @@ function StepCard({ step, index, animate, onDone, onScrollNeeded }) {
         </div>
       )}
 
-      {/* Show Explanation button */}
+      {/* Explanation shown by default, with toggle to hide */}
       {(exprReady) && step.explanation && (
         <div className="step-footer">
           <button

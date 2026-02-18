@@ -129,11 +129,10 @@ def solve_linear_equation(equation_str: str) -> dict:
     # Move x terms from right to left
     if rhs_x_coeff != 0:
         subtract_term = rhs_x_coeff * x
-        new_lhs = expand(lhs - subtract_term)
-        new_rhs = expand(rhs - subtract_term)
         term_str = _format_expr(subtract_term)
         if rhs_x_coeff > 0:
             desc = f"Subtract {term_str} from both sides"
+            work_expr = f"{_format_expr(lhs)} - {term_str} = {_format_expr(rhs)} - {term_str}"
             explanation = (
                 f"The right side has the variable term {term_str}. "
                 f"To move all x-terms to the left, we subtract {term_str} from both sides. "
@@ -142,6 +141,7 @@ def solve_linear_equation(equation_str: str) -> dict:
         else:
             pos_term = _format_expr(-subtract_term)
             desc = f"Add {pos_term} to both sides"
+            work_expr = f"{_format_expr(lhs)} + {pos_term} = {_format_expr(rhs)} + {pos_term}"
             explanation = (
                 f"The right side has {term_str}. "
                 f"To move all x-terms to the left, we add {pos_term} to both sides. "
@@ -149,8 +149,15 @@ def solve_linear_equation(equation_str: str) -> dict:
             )
         steps.append({
             "description": desc,
-            "expression": _format_equation(new_lhs, new_rhs),
+            "expression": work_expr,
             "explanation": explanation,
+        })
+        new_lhs = expand(lhs - subtract_term)
+        new_rhs = expand(rhs - subtract_term)
+        steps.append({
+            "description": "Simplify both sides",
+            "expression": _format_equation(new_lhs, new_rhs),
+            "explanation": f"Combining like terms: the left side becomes {_format_expr(new_lhs)} and the right side becomes {_format_expr(new_rhs)}.",
         })
         lhs, rhs = new_lhs, new_rhs
 
@@ -158,11 +165,10 @@ def solve_linear_equation(equation_str: str) -> dict:
     lhs_x_coeff_now = lhs.coeff(x)
     lhs_const_now = expand(lhs - lhs_x_coeff_now * x)
     if lhs_const_now != 0:
-        new_lhs = expand(lhs - lhs_const_now)
-        new_rhs = expand(rhs - lhs_const_now)
         const_str = _format_expr(lhs_const_now)
         if lhs_const_now > 0:
             desc = f"Subtract {const_str} from both sides"
+            work_expr = f"{_format_expr(lhs)} - {const_str} = {_format_expr(rhs)} - {const_str}"
             explanation = (
                 f"The left side still has the constant {const_str}. "
                 f"To isolate the x-term, we subtract {const_str} from both sides. "
@@ -171,6 +177,7 @@ def solve_linear_equation(equation_str: str) -> dict:
         else:
             pos_const = _format_expr(-lhs_const_now)
             desc = f"Add {pos_const} to both sides"
+            work_expr = f"{_format_expr(lhs)} + {pos_const} = {_format_expr(rhs)} + {pos_const}"
             explanation = (
                 f"The left side has {const_str}. "
                 f"To isolate the x-term, we add {pos_const} to both sides. "
@@ -178,8 +185,15 @@ def solve_linear_equation(equation_str: str) -> dict:
             )
         steps.append({
             "description": desc,
-            "expression": _format_equation(new_lhs, new_rhs),
+            "expression": work_expr,
             "explanation": explanation,
+        })
+        new_lhs = expand(lhs - lhs_const_now)
+        new_rhs = expand(rhs - lhs_const_now)
+        steps.append({
+            "description": "Simplify both sides",
+            "expression": _format_equation(new_lhs, new_rhs),
+            "explanation": f"Combining like terms: the left side becomes {_format_expr(new_lhs)} and the right side becomes {_format_expr(new_rhs)}.",
         })
         lhs, rhs = new_lhs, new_rhs
 
