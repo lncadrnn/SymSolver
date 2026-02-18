@@ -61,7 +61,7 @@ function ExplanationPanel({ explanation, visible }) {
 function StepCard({ step, index, animate, onDone, onScrollNeeded }) {
   const [phase, setPhase] = useState(animate ? 'typing-desc' : 'done')
   // phases: typing-desc -> typing-expr -> done
-  const [showExplanation, setShowExplanation] = useState(true)
+  const [showExplanation, setShowExplanation] = useState(false)
   const cardRef = useRef(null)
 
   const scroll = useCallback(() => {
@@ -165,7 +165,7 @@ function FinalAnswer({ answer, animate, onScrollNeeded }) {
         </svg>
       </div>
       <div>
-        <div className="final-answer-label">Solution</div>
+        <div className="final-answer-label">Final Answer</div>
         <div className="final-answer-text">
           {animate ? <TypewriterText text={answer} speed={22} /> : answer}
         </div>
