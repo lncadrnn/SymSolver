@@ -177,6 +177,33 @@ function FinalAnswer({ answer, animate, onScrollNeeded }) {
 /* ── Verification Section ── */
 function VerificationSection({ verificationSteps, onScrollNeeded }) {
   const [expanded, setExpanded] = useState(false)
+  const [verifyStep, setVerifyStep] = useState(0)
+  const [verifyAllDone, setVerifyAllDone] = useState(false)
+  const verifyStepRef = useRef(0)
+  const verifyCount = verificationSteps?.length || 0
+
+  const handleVerifyStepDone = useCallback(() => {
+    if (verifyStepRef.current < verifyCount - 1) {
+      setTimeout(() => {
+        verifyStepRef.current++
+        setVerifyStep(verifyStepRef.current)
+      }, 300)
+    } else {
+      setTimeout(() => {
+        setVerifyAllDone(true)
+      }, 300)
+    }
+  }, [verifyCount])
+
+  // Reset animation when toggling open
+  const handleToggle = () => {
+    if (!expanded) {
+      verifyStepRef.current = 0
+      setVerifyStep(0)
+      setVerifyAllDone(false)
+    }
+    setExpanded((v) => !v)
+  }
 
   if (!verificationSteps || verificationSteps.length === 0) return null
 
@@ -184,28 +211,32 @@ function VerificationSection({ verificationSteps, onScrollNeeded }) {
     <div className="verification-section">
       <button
         className={`verify-btn ${expanded ? 'active' : ''}`}
-        onClick={() => setExpanded((v) => !v)}
+        onClick={handleToggle}
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
           <path d="M9 12l2 2 4-4" />
           <circle cx="12" cy="12" r="10" />
         </svg>
-        {expanded ? 'Hide Verification' : 'Verify Solution'}
+        {expanded ? 'Hide Verification' : 'Check / Verify Your Answer'}
         <svg className={`verify-chevron ${expanded ? 'open' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
       {expanded && (
         <div className="verification-steps">
-          {verificationSteps.map((step, i) => (
-            <StepCard
-              key={`verify-${i}`}
-              step={step}
-              index={i}
-              animate={false}
-              onScrollNeeded={onScrollNeeded}
-            />
-          ))}
+          {verificationSteps.map((step, i) => {
+            if (!verifyAllDone && i > verifyStep) return null
+            return (
+              <StepCard
+                key={`verify-${i}`}
+                step={step}
+                index={i}
+                animate={!verifyAllDone && i === verifyStep}
+                onDone={handleVerifyStepDone}
+                onScrollNeeded={onScrollNeeded}
+              />
+            )
+          })}
         </div>
       )}
     </div>
@@ -216,10 +247,21 @@ function VerificationSection({ verificationSteps, onScrollNeeded }) {
 function ChatMessage({ message, onScrollNeeded }) {
   const { role, content, loading, steps, finalAnswer, verificationSteps, error, animating } = message
   const [currentStep, setCurrentStep] = useState(0)
-  const [showAnswer, setShowAnswer] = useState(false)
+  const [showAnswer, setShowAnswer] = useState(!animating)
   const [allDone, setAllDone] = useState(!animating)
   const currentStepRef = useRef(0)
   const stepsCount = steps?.length || 0
+
+  // Safety fallback: if animation gets stuck, force show answer after a generous timeout
+  useEffect(() => {
+    if (animating && stepsCount > 0 && !allDone) {
+      const timeout = setTimeout(() => {
+        setShowAnswer(true)
+        setAllDone(true)
+      }, stepsCount * 5000) // 5 seconds per step max
+      return () => clearTimeout(timeout)
+    }
+  }, [animating, stepsCount, allDone])
 
   const handleStepDone = useCallback(() => {
     if (currentStepRef.current < stepsCount - 1) {
