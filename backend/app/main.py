@@ -28,6 +28,7 @@ class SolveResponse(BaseModel):
     equation: str
     steps: list[StepInfo]
     final_answer: str
+    verification_steps: list[StepInfo]
 
 
 @app.post("/api/solve", response_model=SolveResponse)

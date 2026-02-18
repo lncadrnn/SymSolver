@@ -66,6 +66,7 @@ function App() {
             loading: false,
             steps: data.steps || [],
             finalAnswer: data.final_answer || null,
+            verificationSteps: data.verification_steps || [],
             equation: data.equation || equation.trim(),
             error: null,
             animating: true,

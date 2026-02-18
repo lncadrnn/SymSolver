@@ -457,6 +457,65 @@ body {
   font-family: 'Inter', sans-serif;
 }
 
+/* Verification Section */
+.verification-section {
+  margin-top: 8px;
+}
+
+.verify-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(124, 92, 252, 0.08);
+  border: 1px dashed rgba(124, 92, 252, 0.3);
+  border-radius: 10px;
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+  font-family: 'Inter', sans-serif;
+}
+
+.verify-btn:hover {
+  background: rgba(124, 92, 252, 0.15);
+  border-color: var(--accent);
+}
+
+.verify-btn.active {
+  background: rgba(124, 92, 252, 0.12);
+  border-style: solid;
+  border-color: var(--accent);
+}
+
+.verify-btn svg {
+  flex-shrink: 0;
+}
+
+.verify-chevron {
+  margin-left: auto;
+  transition: transform 0.2s;
+}
+
+.verify-chevron.open {
+  transform: rotate(180deg);
+}
+
+.verification-steps {
+  margin-top: 12px;
+  padding-left: 8px;
+  border-left: 2px solid rgba(124, 92, 252, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.verification-steps .step-card {
+  background: rgba(124, 92, 252, 0.04);
+}
+
 /* Typewriter cursor */
 .typewriter-cursor {
   display: inline-block;

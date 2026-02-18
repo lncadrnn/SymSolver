@@ -234,24 +234,51 @@ def solve_linear_equation(equation_str: str) -> dict:
     else:
         solution = simplify(rhs)
 
-    # Verification step
+    # Build verification steps
     lhs_check = _parse_side(equation_str.split('=')[0])
     rhs_check = _parse_side(equation_str.split('=')[1])
-    lhs_val = simplify(lhs_check.subs(x, solution))
-    rhs_val = simplify(rhs_check.subs(x, solution))
+    sol_str = _format_expr(solution)
+    original_eq = f"{_format_expr(lhs_check)} = {_format_expr(rhs_check)}"
 
-    steps.append({
-        "description": "Verify the solution",
-        "expression": (
-            f"LHS = {_format_expr(lhs_val)}\n"
-            f"RHS = {_format_expr(rhs_val)}\n"
-            f"LHS = RHS  ✓"
-        ),
-        "explanation": (
-            f"We substitute x = {_format_expr(solution)} back into the original equation. "
-            f"The left side evaluates to {_format_expr(lhs_val)} and the right side evaluates to {_format_expr(rhs_val)}. "
-            f"Since both sides are equal, our solution is correct!"
-        ),
+    verification_steps = []
+
+    # Step 1: State what we're doing
+    verification_steps.append({
+        "description": "Start with the original equation",
+        "expression": original_eq,
+        "explanation": f"We will substitute x = {sol_str} back into the original equation to verify our answer is correct.",
+    })
+
+    # Step 2: Show substitution
+    lhs_substituted_str = _format_expr(lhs_check).replace('x', f'({sol_str})')
+    rhs_substituted_str = _format_expr(rhs_check).replace('x', f'({sol_str})')
+    verification_steps.append({
+        "description": f"Substitute x = {sol_str} into both sides",
+        "expression": f"{lhs_substituted_str} = {rhs_substituted_str}",
+        "explanation": f"We replace every x with {sol_str} in both the left-hand side and right-hand side of the equation.",
+    })
+
+    # Step 3: Evaluate LHS
+    lhs_val = simplify(lhs_check.subs(x, solution))
+    verification_steps.append({
+        "description": "Evaluate the left-hand side",
+        "expression": f"LHS = {lhs_substituted_str} = {_format_expr(lhs_val)}",
+        "explanation": f"Computing the left side: we substitute and simplify to get {_format_expr(lhs_val)}.",
+    })
+
+    # Step 4: Evaluate RHS
+    rhs_val = simplify(rhs_check.subs(x, solution))
+    verification_steps.append({
+        "description": "Evaluate the right-hand side",
+        "expression": f"RHS = {rhs_substituted_str} = {_format_expr(rhs_val)}",
+        "explanation": f"Computing the right side: we substitute and simplify to get {_format_expr(rhs_val)}.",
+    })
+
+    # Step 5: Compare
+    verification_steps.append({
+        "description": "Compare both sides",
+        "expression": f"LHS = {_format_expr(lhs_val)}, RHS = {_format_expr(rhs_val)}\nLHS = RHS  ✓",
+        "explanation": f"Both sides equal {_format_expr(lhs_val)}, confirming that x = {sol_str} is the correct solution!",
     })
 
     final_answer = f"x = {_format_expr(solution)}"
@@ -260,6 +287,7 @@ def solve_linear_equation(equation_str: str) -> dict:
         "equation": equation_str,
         "steps": steps,
         "final_answer": final_answer,
+        "verification_steps": verification_steps,
     }
 
 
