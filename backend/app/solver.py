@@ -84,7 +84,7 @@ def solve_linear_equation(equation_str: str) -> dict:
     if poly_degree.degree() > 1:
         raise ValueError(
             f"This is a degree-{poly_degree.degree()} equation, not linear. "
-            "DualSolver currently supports linear equations only."
+            "SymSolver currently supports linear equations only."
         )
     if poly_degree.degree() == 0:
         raise ValueError("No variable 'x' found in the equation.")

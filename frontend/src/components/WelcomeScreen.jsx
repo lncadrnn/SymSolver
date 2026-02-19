@@ -17,7 +17,7 @@ function WelcomeScreen({ onExampleClick }) {
       </div>
       <h2>Solve Linear Equations Step by Step</h2>
       <p>
-        Enter any linear equation and watch as DualSolver breaks down the
+        Enter any linear equation and watch as SymSolver breaks down the
         solution into clear, detailed steps — just like a tutor would.
       </p>
       <div className="examples">

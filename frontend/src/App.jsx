@@ -104,7 +104,7 @@ function App() {
             <path d="M2 17l10 5 10-5" />
             <path d="M2 12l10 5 10-5" />
           </svg>
-          <span className="header-title">DualSolver</span>
+          <span className="header-title">SymSolver</span>
           <span className="header-subtitle">Linear Equation Solver</span>
         </div>
       </header>

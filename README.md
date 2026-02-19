@@ -1,6 +1,6 @@
-# DualSolver
+# SymSolver
 
-DualSolver is a web application that helps you solve linear equations step-by-step. It provides a clean, interactive interface to input mathematical equations and receive detailed solutions with explanations for each step.
+SymSolver is a web application that helps you solve linear equations step-by-step. It provides a clean, interactive interface to input mathematical equations and receive detailed solutions with explanations for each step.
 
 ## Features
 
@@ -11,7 +11,7 @@ DualSolver is a web application that helps you solve linear equations step-by-st
 
 ## Symbolic Computation
 
-DualSolver leverages **SymPy**, a powerful Python library for symbolic mathematics, to provide accurate and detailed equation solving. Key capabilities include:
+SymSolver leverages **SymPy**, a powerful Python library for symbolic mathematics, to provide accurate and detailed equation solving. Key capabilities include:
 
 - **Symbolic solving** - Solves equations algebraically rather than numerically, preserving exact mathematical expressions
 - **Step-by-step breakdown** - Decomposes complex solutions into understandable, isolated steps
@@ -19,7 +19,7 @@ DualSolver leverages **SymPy**, a powerful Python library for symbolic mathemati
 - **Expression simplification** - Automatically simplifies expressions to their most reduced form
 - **Multi-variable support** - Handles equations with variables and constants symbolically
 
-The backend intercepts and logs each intermediate step of the solution process, allowing DualSolver to display not just the final answer, but the complete mathematical reasoning behind it.
+The backend intercepts and logs each intermediate step of the solution process, allowing SymSolver to display not just the final answer, but the complete mathematical reasoning behind it.
 
 ## Prerequisites
 

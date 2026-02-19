@@ -1,4 +1,4 @@
-# DualSolver — Project Overview & Roadmap
+# SymSolver — Project Overview & Roadmap
 
 ---
 

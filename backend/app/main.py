@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from app.solver import solve_linear_equation
 
-app = FastAPI(title="DualSolver API")
+app = FastAPI(title="SymSolver API")
 
 app.add_middleware(
     CORSMiddleware,
