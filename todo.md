@@ -30,39 +30,14 @@
 - Dark theme with accent colors
 
 ### Tech stack
-- **Backend:** FastAPI + SymPy (Python)
-- **Frontend:** React (Vite) + vanilla CSS
+- **Solver:** SymPy (Python)
+- **GUI:** Tkinter (Python)
 
 ---
 
 ## Current Bugs & Issues
 
-### 1. No typewriter animation on explanation text
-- **Where:** `ExplanationPanel` in `ChatMessage.jsx`
-- The "Show Explanation" panel renders the full explanation text instantly (`<p>{explanation}</p>`) instead of using the `TypewriterText` component.
-- The step description and expression lines DO animate, but the explanation (the most detailed text) does not.
-
-### 2. Explanation panel is closed by default
-- Each step's explanation requires manually clicking "Show Explanation" — there's no option to auto-expand all explanations or remember the preference.
-- For a "tutor-like" experience, showing explanations by default (or at least for the first solve) might be better.
-
-### 3. No input sanitization on the frontend
-- The frontend sends raw user input directly to the backend with no pre-validation or character filtering. Odd input like emoji or HTML could reach the parser.
-
-### 4. Message list uses array index as React key
-- `messages.map((msg, i) => <ChatMessage key={i} ... />)` — using index as key can cause subtle re-render bugs when messages update in place (the bot placeholder gets mutated).
-
-### 5. Safety fallback timeout is overly generous
-- The animation-stuck fallback is `stepsCount * 5000ms` (5 seconds per step). For a 7-step solution that's 35 seconds before it force-completes. A tighter timeout or per-step watchdog would be better.
-
-### 6. No error boundary
-- If any component throws during render (e.g., unexpected data shape), the entire app crashes with a white screen. A React Error Boundary is missing.
-
-### 7. Verification animation re-triggers every toggle
-- Closing and re-opening the verification section replays the typewriter animation from scratch. It should only animate on first open.
-
-### 8. No clear/reset conversation button
-- Once a conversation starts, there's no way to clear the chat and return to the welcome screen without refreshing the page.
+*(None known — fresh Tkinter rewrite)*
 
 ---
 

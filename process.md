@@ -4,58 +4,33 @@ I'll walk you through the entire process using **`2x + 2 = 5`** as an example.
 
 ---
 
-## 1. User Input → Frontend
+## 1. User Input → GUI
 
 **User types:** `2x + 2 = 5`
 
 **What happens:**
-- [`InputBar.jsx`](frontend/src/components/InputBar.jsx) captures the input
-- When user clicks send or presses Enter, the input is trimmed and passed to [`App.jsx`](frontend/src/App.jsx)
-- [`App.jsx`](frontend/src/App.jsx) creates a user message and adds a placeholder bot message with `loading: true`
+- The Tkinter entry widget in [`gui/app.py`](gui/app.py) captures the input
+- When the user clicks **Solve** or presses **Enter**, the input is trimmed
+- A user message bubble is added to the chat area, and a "Solving…" indicator appears
+- The solver runs in a background thread to keep the GUI responsive
 
 ---
 
-## 2. Frontend → Backend API Call
+## 2. GUI → Solver
 
-**Request:**
-```javascript
-fetch('/api/solve', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ equation: "2x + 2 = 5" })
-})
-```
-
-The request goes to the **FastAPI backend** at [`backend/app/main.py`](backend/app/main.py).
-
----
-
-## 3. Backend Receives Request
-
-In [`main.py`](backend/app/main.py):
+The GUI calls the solver directly (no HTTP/API layer):
 
 ```python
-@app.post("/api/solve", response_model=SolveResponse)
-def solve(req: EquationRequest):
-    equation = req.equation.strip()  # "2x + 2 = 5"
-    
-    # Initial validation
-    if not equation:
-        raise HTTPException(status_code=400, detail="Equation cannot be empty.")
-    
-    try:
-        result = solve_linear_equation(equation)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Solver error: {str(e)}")
+from solver import solve_linear_equation
+
+result = solve_linear_equation(equation)
 ```
 
 ---
 
-## 4. Parsing Phase ([`solver.py`](backend/app/solver.py))
+## 3. Parsing Phase ([`solver/engine.py`](solver/engine.py))
 
-### Step 4.1: Check for `=` sign
+### Step 3.1: Check for `=` sign
 
 ```python
 if '=' not in equation_str:
@@ -64,7 +39,7 @@ if '=' not in equation_str:
 
 ✅ **Pass:** `2x + 2 = 5` contains `=`
 
-### Step 4.2: Split into left and right sides
+### Step 3.2: Split into left and right sides
 
 ```python
 parts = equation_str.split('=')  # ["2x + 2", "5"]
@@ -78,7 +53,7 @@ rhs_str = "5"
 
 ✅ **Pass:** Exactly one `=` sign
 
-### Step 4.3: Parse each side using SymPy
+### Step 3.3: Parse each side using SymPy
 
 The `_parse_side` function processes each side:
 
@@ -104,7 +79,7 @@ def _parse_side(expr_str: str):
 
 ---
 
-## 5. Validation Phase
+## 4. Validation Phase
 
 ### Check if equation is linear
 
@@ -123,7 +98,7 @@ if poly_degree.degree() == 0:
 
 ---
 
-## 6. Step-by-Step Solving
+## 5. Step-by-Step Solving
 
 Now the solver generates human-readable steps:
 
@@ -185,7 +160,7 @@ steps.append({
 
 ---
 
-## 7. Verification Steps
+## 6. Verification Steps
 
 The solver also generates verification steps to prove the answer:
 
@@ -221,41 +196,25 @@ verification_steps = [
 
 ---
 
-## 8. Response Sent to Frontend
+## 7. GUI Rendering
 
-The backend returns:
+Back in [`gui/app.py`](gui/app.py), the result dict is rendered:
 
-```json
-{
-  "equation": "2x + 2 = 5",
-  "steps": [ /* 4-5 step objects */ ],
-  "final_answer": "x = 3/2",
-  "verification_steps": [ /* 5 verification step objects */ ]
-}
-```
+1. Each step is shown as a card with **description** (bold) and **expression** (monospace, accent colour)
+2. A collapsible **"Show Explanation"** toggle reveals the detailed explanation text
+3. The **Final Answer** card appears in green
+4. A collapsible **Verification** section lets the user confirm the proof
 
 ---
 
-## 9. Frontend Rendering
-
-In [`ChatMessage.jsx`](frontend/src/components/ChatMessage.jsx):
-
-1. **Typewriter animation** displays each step's `description` character-by-character
-2. After description completes, the `expression` animates
-3. User can click "Show Explanation" to reveal the detailed `explanation`
-4. After all steps, the **Final Answer** card appears
-5. User can expand **Verification** section to see the proof
-
----
-
-## Error Handling & Fallbacks
+## 8. Error Handling & Fallbacks
 
 ### Missing `=` sign
 ```python
 if '=' not in equation_str:
     raise ValueError("Equation must contain '='. Example: 2x + 3 = 7")
 ```
-**Frontend shows:** Red error message
+**GUI shows:** Red error message
 
 ### Multiple `=` signs
 ```python
@@ -307,11 +266,11 @@ else:
 ```
 User Input: "2x + 2 = 5"
     ↓
-Frontend validates (not empty)
+GUI validates (not empty)
     ↓
-POST /api/solve
+Background thread: solve_linear_equation()
     ↓
-Backend: Check for '='  ✓
+Check for '='  ✓
     ↓
 Split into ["2x + 2", "5"]
     ↓
@@ -325,9 +284,9 @@ Generate steps:
   3. Divide by 2: x = 3/2
   4. Verification steps
     ↓
-Return JSON response
+Return result dict
     ↓
-Frontend renders with typewriter animation
+GUI renders step cards
     ↓
 User sees step-by-step solution
 ```
@@ -337,11 +296,10 @@ User sees step-by-step solution
 ## Architecture Summary
 
 This architecture separates concerns cleanly:
-- **Frontend** handles UI/UX and animations
-- **Backend** focuses on symbolic math and validation
+- **GUI** (`gui/app.py`) handles the Tkinter desktop interface
+- **Solver** (`solver/engine.py`) focuses on symbolic math and validation
 - All error cases are caught and displayed gracefully to the user
 
 The system uses:
 - **SymPy** for symbolic mathematics and parsing
-- **FastAPI** for the REST API
-- **React** with typewriter animations for an engaging user experience
+- **Tkinter** for the desktop GUI
