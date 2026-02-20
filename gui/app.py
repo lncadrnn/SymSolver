@@ -216,10 +216,26 @@ class SymSolverApp(tk.Tk):
             try:
                 result = solve_linear_equation(equation)
                 self.after(0, lambda: self._show_result(result, loading_label))
-            except (ValueError, Exception) as exc:
-                self.after(0, lambda: self._show_error(str(exc), loading_label))
+            except Exception as exc:
+                msg = self._friendly_error(equation, exc)
+                self.after(0, lambda: self._show_error(msg, loading_label))
 
         threading.Thread(target=_solve, daemon=True).start()
+
+    @staticmethod
+    def _friendly_error(equation: str, exc: Exception) -> str:
+        """Return a user-friendly error message for common mistakes."""
+        msg = str(exc)
+        # Already a clear ValueError from the solver — keep it.
+        if isinstance(exc, ValueError):
+            return msg
+        # Generic fallback for unexpected failures.
+        return (
+            f"SymSolver could not process \"{equation}\".\n\n"
+            "This tool only supports linear equations (degree 1) in x.\n"
+            "Examples:  2x + 3 = 7,  5x - 2 = 3x + 8\n\n"
+            f"Details: {msg}"
+        )
 
     def _set_input_state(self, enabled: bool) -> None:
         state = tk.NORMAL if enabled else tk.DISABLED
