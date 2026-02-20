@@ -39,7 +39,11 @@ def _format_expr(expr) -> str:
     """Format a SymPy expression into a readable string."""
     s = str(expr)
     # Clean up SymPy formatting
-    s = s.replace('**', '^').replace('*', '·')
+    s = s.replace('**', '^')
+    # Remove * between coefficient and variable (e.g. 2*x → 2x)
+    s = re.sub(r'(\d)\*([A-Za-z])', r'\1\2', s)
+    # Replace any remaining * with ·
+    s = s.replace('*', '·')
     return s
 
 

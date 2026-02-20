@@ -13,23 +13,23 @@ from solver import solve_linear_equation
 
 
 # ── colour palette ──────────────────────────────────────────────────────────
-BG           = "#1a1a2e"
-BG_DARKER    = "#141425"
-HEADER_BG    = "#16213e"
-ACCENT       = "#7c5cfc"
-ACCENT_HOVER = "#6a4de0"
-TEXT         = "#e0e0e0"
-TEXT_DIM     = "#8888aa"
-TEXT_BRIGHT  = "#ffffff"
-USER_BG      = "#2a2a4a"
-BOT_BG       = "#1e1e3a"
-STEP_BG      = "#252545"
-STEP_BORDER  = "#3a3a5a"
+BG           = "#0a0a0a"
+BG_DARKER    = "#050505"
+HEADER_BG    = "#111111"
+ACCENT       = "#0F4C75"
+ACCENT_HOVER = "#0a3a5c"
+TEXT         = "#d0d0d0"
+TEXT_DIM     = "#cccccc"
+TEXT_BRIGHT  = "#f0f0f0"
+USER_BG      = "#1a1a1a"
+BOT_BG       = "#121212"
+STEP_BG      = "#181818"
+STEP_BORDER  = "#2a2a2a"
 SUCCESS      = "#4caf50"
 ERROR        = "#ff5555"
-INPUT_BG     = "#252545"
-INPUT_BORDER = "#3a3a5a"
-VERIFY_BG    = "#1a2a1a"
+INPUT_BG     = "#181818"
+INPUT_BORDER = "#2a2a2a"
+VERIFY_BG    = "#0f1a0f"
 
 
 class SymSolverApp(tk.Tk):
@@ -309,10 +309,10 @@ class SymSolverApp(tk.Tk):
         self._render_section_header(bot, "FINAL ANSWER", "✓")
         ans_frame = tk.Frame(bot, bg=SUCCESS, padx=1, pady=1)
         ans_frame.pack(fill=tk.X, pady=(2, 4))
-        ans_inner = tk.Frame(ans_frame, bg="#1a2e1a", padx=12, pady=8)
+        ans_inner = tk.Frame(ans_frame, bg="#0f1a0f", padx=12, pady=8)
         ans_inner.pack(fill=tk.X)
         tk.Label(ans_inner, text=result["final_answer"], font=self._mono,
-                 bg="#1a2e1a", fg=TEXT_BRIGHT, anchor="w"
+                 bg="#0f1a0f", fg=TEXT_BRIGHT, anchor="w"
                  ).pack(fill=tk.X)
 
         # ── VERIFICATION ───────────────────────────────────────────────
