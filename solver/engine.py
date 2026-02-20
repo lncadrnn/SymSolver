@@ -84,6 +84,33 @@ def _format_equation(lhs, rhs) -> str:
     return f"{_format_expr(lhs)} = {_format_expr(rhs)}"
 
 
+def _count_terms_in_str(expr_str: str) -> int:
+    """Count the number of top-level additive terms in an expression string.
+
+    Respects parentheses so that terms inside (...) are not counted separately.
+    A leading sign (+ or -) is not treated as a term separator.
+    """
+    s = expr_str.strip()
+    if not s:
+        return 0
+    depth = 0
+    count = 1
+    i = 0
+    # Skip leading sign
+    if s[0] in ('+', '-'):
+        i = 1
+    while i < len(s):
+        ch = s[i]
+        if ch == '(':
+            depth += 1
+        elif ch == ')':
+            depth -= 1
+        elif ch in ('+', '-') and depth == 0:
+            count += 1
+        i += 1
+    return count
+
+
 def solve_linear_equation(equation_str: str) -> dict:
     """
     Solve a linear equation step by step.
@@ -141,12 +168,66 @@ def solve_linear_equation(equation_str: str) -> dict:
     original_lhs_str = equation_str.split('=')[0].strip()
     original_rhs_str = equation_str.split('=')[1].strip()
 
-    # Step 0: Original equation
+    # Step 0: Original equation (show as user typed it)
     steps.append({
         "description": "Starting with the original equation",
-        "expression": _format_equation(lhs, rhs),
+        "expression": f"{original_lhs_str} = {original_rhs_str}",
         "explanation": f"We are given the equation {original_lhs_str} = {original_rhs_str}. Our goal is to isolate {var_name} on one side to find its value.",
     })
+
+    # --- Step: Combine like terms / Expand (if parsing auto-simplified) ---
+    # SymPy may auto-combine like terms (2x + 5x → 7x) or auto-expand
+    # (3(x+4) → 3x + 12) during parsing.  Detect this and show a step.
+    _orig_lhs_terms = _count_terms_in_str(original_lhs_str)
+    _orig_rhs_terms = _count_terms_in_str(original_rhs_str)
+    _parsed_lhs_terms = len(Add.make_args(lhs))
+    _parsed_rhs_terms = len(Add.make_args(rhs))
+
+    _lhs_term_changed = _orig_lhs_terms != _parsed_lhs_terms
+    _rhs_term_changed = _orig_rhs_terms != _parsed_rhs_terms
+    # Also detect when parentheses disappeared (expansion + combining may
+    # leave the same term count, e.g. "2(x+1) + 3x" → "5x + 2").
+    _parens_gone = (
+        ('(' in original_lhs_str and '(' not in _format_expr(lhs)) or
+        ('(' in original_rhs_str and '(' not in _format_expr(rhs))
+    )
+
+    if _lhs_term_changed or _rhs_term_changed or _parens_gone:
+        _has_parens = '(' in original_lhs_str or '(' in original_rhs_str
+        _terms_decreased = (_orig_lhs_terms > _parsed_lhs_terms or
+                            _orig_rhs_terms > _parsed_rhs_terms)
+
+        if _has_parens and _terms_decreased:
+            desc = "Expand and combine like terms"
+        elif _has_parens:
+            # Parens present; if term count didn't change, both expansion and
+            # combining happened (they cancelled out in count).
+            desc = ("Expand and combine like terms"
+                    if _parens_gone and not _lhs_term_changed and not _rhs_term_changed
+                    else "Expand")
+        else:
+            desc = "Combine like terms"
+
+        parts = []
+        _lhs_changed = _lhs_term_changed or ('(' in original_lhs_str and '(' not in _format_expr(lhs))
+        _rhs_changed = _rhs_term_changed or ('(' in original_rhs_str and '(' not in _format_expr(rhs))
+        if _lhs_changed:
+            action = "expands to" if '(' in original_lhs_str else "simplifies to"
+            parts.append(
+                f"On the left side, {original_lhs_str} {action} "
+                f"{_format_expr(lhs)}"
+            )
+        if _rhs_changed:
+            action = "expands to" if '(' in original_rhs_str else "simplifies to"
+            parts.append(
+                f"On the right side, {original_rhs_str} {action} "
+                f"{_format_expr(rhs)}"
+            )
+        steps.append({
+            "description": desc,
+            "expression": _format_equation(lhs, rhs),
+            "explanation": ". ".join(parts) + ".",
+        })
 
     # --- Step 1: Expand both sides (if needed) ---
     lhs_expanded = expand(lhs)
