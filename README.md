@@ -29,7 +29,7 @@ The solver intercepts and logs each intermediate step of the solution process, a
 ## Project Structure
 
 ```
-DualSolver/
+SymSolver/
 ├── main.py              # Entry point — run this to start the app
 ├── requirements.txt     # Python dependencies
 ├── README.md
