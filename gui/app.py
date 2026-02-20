@@ -267,31 +267,102 @@ class SymSolverApp(tk.Tk):
         tk.Label(bot, text="SymSolver", font=self._bold, bg=BOT_BG,
                  fg=ACCENT, anchor="w").pack(fill=tk.X)
 
-        # ── Solution steps ──────────────────────────────────────────────
-        tk.Label(bot, text="Solution Steps", font=self._bold, bg=BOT_BG,
-                 fg=TEXT_BRIGHT, anchor="w").pack(fill=tk.X, pady=(8, 4))
+        # ── GIVEN ──────────────────────────────────────────────────────
+        given = result.get("given", {})
+        self._render_section_header(bot, "GIVEN", "📋")
+        given_frame = self._make_card(bot, STEP_BG)
+        tk.Label(given_frame, text=given.get("problem", result["equation"]),
+                 font=self._default, bg=STEP_BG, fg=TEXT_BRIGHT, anchor="w",
+                 wraplength=650, justify=tk.LEFT).pack(fill=tk.X)
+        inputs = given.get("inputs", {})
+        if inputs:
+            for key, val in inputs.items():
+                tk.Label(given_frame,
+                         text=f"  {key.replace('_', ' ').title()}:  {val}",
+                         font=self._small, bg=STEP_BG, fg=TEXT_DIM,
+                         anchor="w").pack(fill=tk.X)
 
+        # ── METHOD ─────────────────────────────────────────────────────
+        method = result.get("method", {})
+        self._render_section_header(bot, "METHOD", "⚙")
+        method_frame = self._make_card(bot, STEP_BG)
+        tk.Label(method_frame, text=method.get("name", "Algebraic Isolation"),
+                 font=self._bold, bg=STEP_BG, fg=ACCENT, anchor="w").pack(fill=tk.X)
+        if method.get("description"):
+            tk.Label(method_frame, text=method["description"],
+                     font=self._small, bg=STEP_BG, fg=TEXT_DIM, anchor="w",
+                     wraplength=650, justify=tk.LEFT).pack(fill=tk.X, pady=(2, 0))
+        params = method.get("parameters", {})
+        if params:
+            for key, val in params.items():
+                tk.Label(method_frame,
+                         text=f"  {key.replace('_', ' ').title()}:  {val}",
+                         font=self._small, bg=STEP_BG, fg=TEXT_DIM,
+                         anchor="w").pack(fill=tk.X)
+
+        # ── STEPS ──────────────────────────────────────────────────────
+        self._render_section_header(bot, "STEPS", "📝")
         for step in result["steps"]:
             self._render_step(bot, step)
 
-        # ── Final answer ────────────────────────────────────────────────
+        # ── FINAL ANSWER ───────────────────────────────────────────────
+        self._render_section_header(bot, "FINAL ANSWER", "✓")
         ans_frame = tk.Frame(bot, bg=SUCCESS, padx=1, pady=1)
-        ans_frame.pack(fill=tk.X, pady=(10, 4))
+        ans_frame.pack(fill=tk.X, pady=(2, 4))
         ans_inner = tk.Frame(ans_frame, bg="#1a2e1a", padx=12, pady=8)
         ans_inner.pack(fill=tk.X)
-        tk.Label(ans_inner, text="✓  Final Answer", font=self._bold,
-                 bg="#1a2e1a", fg=SUCCESS, anchor="w").pack(fill=tk.X)
         tk.Label(ans_inner, text=result["final_answer"], font=self._mono,
                  bg="#1a2e1a", fg=TEXT_BRIGHT, anchor="w"
-                 ).pack(fill=tk.X, pady=(2, 0))
+                 ).pack(fill=tk.X)
 
-        # ── Verification (collapsible) ──────────────────────────────────
+        # ── VERIFICATION ───────────────────────────────────────────────
         if result.get("verification_steps"):
+            self._render_section_header(bot, "VERIFICATION", "🔍")
             self._render_verification(bot, result["verification_steps"])
+
+        # ── SUMMARY ────────────────────────────────────────────────────
+        summary = result.get("summary", {})
+        if summary:
+            self._render_section_header(bot, "SUMMARY", "📊")
+            sum_frame = self._make_card(bot, STEP_BG)
+            details = [
+                ("Runtime", f"{summary.get('runtime_ms', '?')} ms"),
+                ("Steps", str(summary.get('total_steps', '?'))),
+                ("Verification Steps", str(summary.get('verification_steps', '?'))),
+                ("Timestamp", summary.get('timestamp', '?')),
+                ("Library", summary.get('library', '?')),
+            ]
+            for label, value in details:
+                row = tk.Frame(sum_frame, bg=STEP_BG)
+                row.pack(fill=tk.X, pady=1)
+                tk.Label(row, text=f"  {label}:", font=self._small,
+                         bg=STEP_BG, fg=TEXT_DIM, anchor="w",
+                         width=22).pack(side=tk.LEFT)
+                tk.Label(row, text=value, font=self._small,
+                         bg=STEP_BG, fg=TEXT_BRIGHT, anchor="w"
+                         ).pack(side=tk.LEFT)
 
         self._set_input_state(True)
         self._entry.focus_set()
         self._scroll_to_bottom()
+
+    # ── Section header helper ───────────────────────────────────────────
+
+    def _render_section_header(self, parent: tk.Frame, title: str, icon: str = "") -> None:
+        header = tk.Frame(parent, bg=BOT_BG)
+        header.pack(fill=tk.X, pady=(10, 2))
+        label_text = f"{icon}  {title}" if icon else title
+        tk.Label(header, text=label_text, font=self._bold,
+                 bg=BOT_BG, fg=ACCENT, anchor="w").pack(fill=tk.X)
+        # thin accent line
+        tk.Frame(header, bg=ACCENT, height=1).pack(fill=tk.X, pady=(2, 0))
+
+    def _make_card(self, parent: tk.Frame, bg: str) -> tk.Frame:
+        wrapper = tk.Frame(parent, bg=STEP_BORDER, padx=1, pady=1)
+        wrapper.pack(fill=tk.X, pady=3)
+        card = tk.Frame(wrapper, bg=bg, padx=10, pady=8)
+        card.pack(fill=tk.X)
+        return card
 
     # ── Step renderer ───────────────────────────────────────────────────
 
@@ -302,8 +373,12 @@ class SymSolverApp(tk.Tk):
         card = tk.Frame(wrapper, bg=STEP_BG, padx=10, pady=8)
         card.pack(fill=tk.X)
 
-        # description
-        tk.Label(card, text=step["description"], font=self._bold,
+        # description with step number
+        step_num = step.get("step_number")
+        desc = step["description"]
+        if step_num is not None:
+            desc = f"Step {step_num}:  {desc}"
+        tk.Label(card, text=desc, font=self._bold,
                  bg=STEP_BG, fg=TEXT_BRIGHT, anchor="w").pack(fill=tk.X)
         # expression
         tk.Label(card, text=step["expression"], font=self._mono,
@@ -332,7 +407,6 @@ class SymSolverApp(tk.Tk):
                     c.pack(fill=tk.X, pady=(2, 0))
                     v.set(True)
                     b.configure(text="▾ Hide Explanation")
-                self._scroll_to_bottom()
 
             btn = tk.Button(
                 toggle_frame, text="▸ Show Explanation", font=self._small,
@@ -362,7 +436,6 @@ class SymSolverApp(tk.Tk):
                 c.pack(fill=tk.X)
                 v.set(True)
                 b.configure(text="▾ Hide Verification")
-                self._scroll_to_bottom()
 
         btn = tk.Button(
             container, text="▸ Show Verification", font=self._bold,

@@ -6,6 +6,10 @@ and produces human-readable step-by-step explanations.
 """
 
 import re
+import time
+from datetime import datetime
+
+import sympy
 from sympy import (
     symbols, sympify, Eq, solve, simplify, expand,
     Add, Mul, Rational, S, Symbol
@@ -47,11 +51,15 @@ def solve_linear_equation(equation_str: str) -> dict:
     """
     Solve a linear equation step by step.
 
-    Returns a dict with:
-      - equation: the original equation string
-      - steps: list of {description, expression}
+    Returns a dict with trail-format sections:
+      - given: problem statement and inputs
+      - method: method name and parameters
+      - steps: list of {step_number, description, expression, explanation}
       - final_answer: the solution string
+      - verification_steps: substitution check
+      - summary: runtime, timestamp, library versions
     """
+    t_start = time.perf_counter()
     # --- Parse ---
     if '=' not in equation_str:
         raise ValueError("Equation must contain '='. Example: 2x + 3 = 7")
@@ -283,11 +291,53 @@ def solve_linear_equation(equation_str: str) -> dict:
 
     final_answer = f"x = {_format_expr(solution)}"
 
+    # ── Number the steps ────────────────────────────────────────────────
+    for i, step in enumerate(steps, start=1):
+        step["step_number"] = i
+    for i, step in enumerate(verification_steps, start=1):
+        step["step_number"] = i
+
+    # ── Build trail metadata ────────────────────────────────────────────
+    t_end = time.perf_counter()
+    runtime_ms = round((t_end - t_start) * 1000, 2)
+
+    given = {
+        "problem": f"Solve the linear equation: {equation_str}",
+        "inputs": {
+            "equation": equation_str,
+            "left_side": original_lhs_str,
+            "right_side": original_rhs_str,
+            "variable": "x",
+        },
+    }
+
+    method = {
+        "name": "Algebraic Isolation (Linear)",
+        "description": "Isolate the variable by performing inverse operations step-by-step.",
+        "parameters": {
+            "equation_type": "Linear (degree 1)",
+            "variable": "x",
+            "approach": "Expand → Collect like terms → Isolate variable → Simplify",
+        },
+    }
+
+    summary = {
+        "runtime_ms": runtime_ms,
+        "total_steps": len(steps),
+        "verification_steps": len(verification_steps),
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "library": f"SymPy {sympy.__version__}",
+        "python": None,  # filled by caller if desired
+    }
+
     return {
         "equation": equation_str,
+        "given": given,
+        "method": method,
         "steps": steps,
         "final_answer": final_answer,
         "verification_steps": verification_steps,
+        "summary": summary,
     }
 
 
