@@ -1,6 +1,6 @@
 # How SymSolver Parses and Solves Linear Equations
 
-I'll walk you through the entire process using **`2x + 2 = 5`** as an example.
+I'll walk you through the entire process using **`2x + 2 = 5`** as the primary example, with a secondary example **`2x + 5x + 3 = 1 + 5`** to show how like-term combining works.
 
 Every computation follows the **Standard Trail Format**, which ensures the UI always displays these six sections: **GIVEN → METHOD → STEPS → FINAL ANSWER → VERIFICATION → SUMMARY**.
 
@@ -62,13 +62,13 @@ rhs_str = "5"
 The `_parse_side` function processes each side:
 
 ```python
-def _parse_side(expr_str: str):
+def _parse_side(expr_str: str, var_symbol: Symbol):
     s = expr_str.strip()
     s = s.replace('^', '**')  # Convert user-friendly ^ to Python **
-    
+    local = {var_symbol.name: var_symbol}
     try:
         return parse_expr(s, 
-                         local_dict={'x': x}, 
+                         local_dict=local, 
                          transformations=TRANSFORMATIONS)
     except Exception as e:
         raise ValueError(f"Could not parse expression: '{expr_str}'. Error: {e}")
@@ -80,6 +80,38 @@ def _parse_side(expr_str: str):
 
 **For `5`:**
 - Result: `Integer(5)`
+
+> **Important:** SymPy auto-combines like terms during parsing. For example, `2x + 5x + 3` is parsed directly as `7*x + 3`. Similarly, `3(x + 4)` is auto-expanded to `3*x + 12`. The solver detects this and shows it as an explicit step (see §5.3).
+
+### Step 3.4: Helper — `_count_terms_in_str`
+
+To detect auto-simplification, the solver counts top-level additive terms in the **raw text** and compares with the parsed result:
+
+```python
+def _count_terms_in_str(expr_str: str) -> int:
+    """Count top-level additive terms, respecting parentheses."""
+    depth = 0
+    count = 1
+    i = 0
+    # Skip leading sign
+    if s[0] in ('+', '-'):
+        i = 1
+    while i < len(s):
+        ch = s[i]
+        if ch == '(':   depth += 1
+        elif ch == ')': depth -= 1
+        elif ch in ('+', '-') and depth == 0:
+            count += 1
+        i += 1
+    return count
+```
+
+| Input string | Result |
+|---|---|
+| `"2x + 5x + 3"` | 3 |
+| `"1 + 5"` | 2 |
+| `"3(x + 4)"` | 1 (the `+` is inside parens) |
+| `"2(x+1) + 3x"` | 2 |
 
 ---
 
@@ -142,20 +174,63 @@ This tells the reader exactly which algorithm is being used and what strategy th
 
 Each step is a dict with `step_number`, `description`, `expression`, and `explanation`.
 
-**Step 1: Original equation**
+**Step 1: Original equation (as the user typed it)**
 
 ```python
 {
     "step_number": 1,
     "description": "Starting with the original equation",
-    "expression": "2·x + 2 = 5",
+    "expression": "2x + 2 = 5",  # exact user input, not SymPy's formatted version
     "explanation": "We are given the equation 2x + 2 = 5. Our goal is to isolate x..."
 }
 ```
 
-**Step 2: Expand (if needed)**
+The expression is the **raw user input** (e.g. `2x + 5x + 3 = 1 + 5`), not SymPy's already-simplified form. This lets the next step show what changed.
 
-Since `2x + 2` and `5` have no parentheses to expand, this step is **skipped**.
+**Step 2: Combine like terms / Expand (if needed)**
+
+Before any algebraic moves, SymPy may have auto-simplified the parsed expression. The solver detects this by comparing:
+- The number of top-level additive terms in the **original text** (via `_count_terms_in_str`)
+- The number of terms in the **parsed SymPy expression** (via `Add.make_args`)
+- Whether **parentheses disappeared** during parsing
+
+Depending on what changed, the step is labelled:
+
+| What happened | Step description |
+|---|---|
+| Like terms merged (e.g. `2x + 5x` → `7x`) | **Combine like terms** |
+| Parentheses distributed (e.g. `3(x+4)` → `3x + 12`) | **Expand** |
+| Both at once (e.g. `2(x+1) + 3x` → `5x + 2`) | **Expand and combine like terms** |
+| Nothing changed (e.g. `2x + 2 = 5`) | *Step skipped entirely* |
+
+**Example — `2x + 5x + 3 = 1 + 5`:**
+
+```python
+{
+    "step_number": 2,
+    "description": "Combine like terms",
+    "expression": "7x + 3 = 6",
+    "explanation": "On the left side, 2x + 5x + 3 simplifies to 7x + 3. "
+                   "On the right side, 1 + 5 simplifies to 6."
+}
+```
+
+**Example — `3(x + 4) = 2x - 1`:**
+
+```python
+{
+    "step_number": 2,
+    "description": "Expand",
+    "expression": "3x + 12 = 2x - 1",
+    "explanation": "On the left side, 3(x + 4) expands to 3x + 12."
+}
+```
+
+For our primary example `2x + 2 = 5`, neither side changes during parsing, so this step is **skipped**.
+
+**Step 2: Expand both sides (legacy — if still needed after combining)**
+
+If the parsed expression still contains un-expanded terms (rare after the above step), SymPy's `expand()` is applied. Usually this is a no-op now.
 
 **Step 2: Move constants to the right**
 
@@ -364,7 +439,7 @@ else:
 ## Summary Flow Diagram
 
 ```
-User Input: "2x + 2 = 5"
+User Input: "2x + 5x + 3 = 1 + 5"
     ↓
 GUI validates (not empty)
     ↓
@@ -374,17 +449,32 @@ Start timer (time.perf_counter)
     ↓
 Check for '='  ✓
     ↓
-Split into ["2x + 2", "5"]
+Split into ["2x + 5x + 3", "1 + 5"]
     ↓
-Parse with SymPy → (2*x + 2, 5)
+Parse with SymPy → (7*x + 3, 6)   ← auto-combines like terms
     ↓
 Validate: degree == 1?  ✓
+    ↓
+Step 1: Show original equation as typed
+    ↓
+Detect auto-simplification:
+  _count_terms_in_str("2x + 5x + 3") = 3,  Add.make_args(7x + 3) = 2
+  _count_terms_in_str("1 + 5") = 2,         Add.make_args(6) = 1
+  → terms decreased → Step 2: "Combine like terms"
+    ↓
+Expand (if needed) — usually no-op after combining
+    ↓
+Generate remaining solving steps:
+  ├─ Move variable terms left / constants right
+  ├─ Simplify both sides
+  ├─ Divide by coefficient
+  └─ Simplify to get the answer
     ↓
 Generate trail sections:
   ┌─ GIVEN:        problem + inputs
   ├─ METHOD:       Algebraic Isolation + parameters
-  ├─ STEPS:        numbered solving steps
-  ├─ FINAL ANSWER: x = 3/2
+  ├─ STEPS:        numbered solving steps (with combine/expand)
+  ├─ FINAL ANSWER: x = 3/7
   ├─ VERIFICATION: substitution check (5 steps)
   └─ SUMMARY:      runtime, timestamp, SymPy version
     ↓
