@@ -160,6 +160,11 @@ class SymSolverApp(tk.Tk):
             self._welcome_frame,
             text="Type a linear equation below and press Solve.",
             font=self._default, bg=BG, fg=TEXT_DIM,
+        ).pack(pady=(0, 4))
+        tk.Label(
+            self._welcome_frame,
+            text="Supports any variable: x, y, z, a, b, …",
+            font=self._small, bg=BG, fg=TEXT_DIM,
         ).pack(pady=(0, 20))
 
         tk.Label(
@@ -167,8 +172,8 @@ class SymSolverApp(tk.Tk):
             font=self._bold, bg=BG, fg=TEXT_DIM,
         ).pack(pady=(0, 6))
 
-        examples = ["2x + 3 = 7", "5x - 2 = 3x + 8",
-                     "3(x + 4) = 2x - 1", "x/2 + 1 = 4"]
+        examples = ["2x + 3 = 7", "5y - 2 = 3y + 8",
+                     "3(z + 4) = 2z - 1", "a/2 + 1 = 4"]
         for eq in examples:
             btn = tk.Button(
                 self._welcome_frame, text=eq, font=self._mono,
@@ -232,8 +237,8 @@ class SymSolverApp(tk.Tk):
         # Generic fallback for unexpected failures.
         return (
             f"SymSolver could not process \"{equation}\".\n\n"
-            "This tool only supports linear equations (degree 1) in x.\n"
-            "Examples:  2x + 3 = 7,  5x - 2 = 3x + 8\n\n"
+            "This tool only supports linear equations (degree 1) with a single variable.\n"
+            "Examples:  2x + 3 = 7,  5y - 2 = 3y + 8\n\n"
             f"Details: {msg}"
         )
 
