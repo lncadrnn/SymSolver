@@ -158,12 +158,12 @@ class SymSolverApp(tk.Tk):
         ).pack(pady=(8, 2))
         tk.Label(
             self._welcome_frame,
-            text="Type a linear equation below and press Solve.",
+            text="Type a linear equation or system below and press Solve.",
             font=self._default, bg=BG, fg=TEXT_DIM,
         ).pack(pady=(0, 4))
         tk.Label(
             self._welcome_frame,
-            text="Supports any variable: x, y, z, a, b, …",
+            text="Supports one or more variables  •  Separate systems with commas",
             font=self._small, bg=BG, fg=TEXT_DIM,
         ).pack(pady=(0, 20))
 
@@ -173,7 +173,8 @@ class SymSolverApp(tk.Tk):
         ).pack(pady=(0, 6))
 
         examples = ["2x + 3 = 7", "5y - 2 = 3y + 8",
-                     "3(z + 4) = 2z - 1", "a/2 + 1 = 4"]
+                     "2x + 4y = 1",
+                     "x + y = 10, x - y = 2"]
         for eq in examples:
             btn = tk.Button(
                 self._welcome_frame, text=eq, font=self._mono,
@@ -237,8 +238,9 @@ class SymSolverApp(tk.Tk):
         # Generic fallback for unexpected failures.
         return (
             f"SymSolver could not process \"{equation}\".\n\n"
-            "This tool only supports linear equations (degree 1) with a single variable.\n"
-            "Examples:  2x + 3 = 7,  5y - 2 = 3y + 8\n\n"
+            "Supports linear equations with one or more variables,\n"
+            "and systems separated by commas or semicolons.\n"
+            "Examples:  2x + 3 = 7  \u2022  2x + 4y = 1  \u2022  x+y=10, x-y=2\n\n"
             f"Details: {msg}"
         )
 
@@ -332,9 +334,10 @@ class SymSolverApp(tk.Tk):
         ans_frame.pack(fill=tk.X, pady=(2, 4))
         ans_inner = tk.Frame(ans_frame, bg="#0f1a0f", padx=16, pady=12)
         ans_inner.pack(fill=tk.X)
-        tk.Label(ans_inner, text=result["final_answer"], font=self._mono,
-                 bg="#0f1a0f", fg=TEXT_BRIGHT, anchor="w"
-                 ).pack(fill=tk.X)
+        for _ans_line in result["final_answer"].split("\n"):
+            tk.Label(ans_inner, text=_ans_line, font=self._mono,
+                     bg="#0f1a0f", fg=TEXT_BRIGHT, anchor="w"
+                     ).pack(fill=tk.X)
 
         # ── VERIFICATION ───────────────────────────────────────────────
         if result.get("verification_steps"):

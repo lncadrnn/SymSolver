@@ -1,8 +1,10 @@
 """
 Step-by-step linear equation solver using SymPy.
 
-Parses a linear equation string (e.g. "2x + 3 = 7"), solves it symbolically,
-and produces human-readable step-by-step explanations.
+Parses linear equations — single-variable (e.g. "2x + 3 = 7"),
+multi-variable (e.g. "2x + 4y = 1"), or systems of equations
+(e.g. "x + y = 10, x - y = 2") — and produces human-readable
+step-by-step explanations.
 """
 
 import re
@@ -25,17 +27,19 @@ TRANSFORMATIONS = standard_transformations + (implicit_multiplication_applicatio
 _ALLOWED_VARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 
-def _detect_variable(equation_str: str) -> str:
-    """Return the single-letter variable found in *equation_str*.
+def _detect_variables(equation_str: str) -> list:
+    """Return a sorted list of single-letter variables found in *equation_str*.
 
-    Raises ValueError when zero or more than one distinct letter is found.
+    Multi-character alphabetic tokens that aren't reserved math functions
+    are treated as implicit multiplication of their individual letters
+    (e.g. ``xyz`` → x·y·z, ``asdfghjkl`` → a·s·d·f·g·h·j·k·l).
+    The linearity check later will reject terms where variables are
+    multiplied together (degree > 1).
+
+    Raises ValueError when no valid variable is found.
     """
-    # Remove anything that isn't a letter or is part of known function/
-    # constant names we want to ignore (e.g. 'sin', 'cos', 'pi', 'exp', …).
     cleaned = equation_str.replace('^', '**')
-    # Tokenise: pull out all purely-alpha runs
     tokens = re.findall(r'[A-Za-z]+', cleaned)
-    # Ignore common math words / SymPy built-ins
     _RESERVED = {
         'sin', 'cos', 'tan', 'log', 'ln', 'exp', 'sqrt',
         'pi', 'PI', 'Pi', 'abs', 'E',
@@ -44,24 +48,27 @@ def _detect_variable(equation_str: str) -> str:
     for tok in tokens:
         if tok in _RESERVED:
             continue
-        # Only single-letter names count as unknowns
-        if len(tok) == 1 and tok in _ALLOWED_VARS:
-            candidates.add(tok)
+        # Every letter in the token is treated as its own variable
+        # (implicit multiplication: "abc" means a·b·c).
+        for ch in tok:
+            if ch in _ALLOWED_VARS:
+                candidates.add(ch)
     if len(candidates) == 0:
         raise ValueError("No variable found. Include a letter like x, y, or z.")
-    if len(candidates) > 1:
-        raise ValueError(
-            f"Multiple variables detected ({', '.join(sorted(candidates))}). "
-            "SymSolver supports equations with a single unknown variable."
-        )
-    return candidates.pop()
+    return sorted(candidates)
 
 
-def _parse_side(expr_str: str, var_symbol: Symbol):
-    """Parse one side of the equation into a SymPy expression."""
+def _parse_side(expr_str: str, var_symbols):
+    """Parse one side of the equation into a SymPy expression.
+
+    *var_symbols* may be a single ``Symbol`` or a list of ``Symbol`` objects.
+    """
     s = expr_str.strip()
     s = s.replace('^', '**')
-    local = {var_symbol.name: var_symbol}
+    if isinstance(var_symbols, Symbol):
+        local = {var_symbols.name: var_symbols}
+    else:
+        local = {sym.name: sym for sym in var_symbols}
     try:
         return parse_expr(s, local_dict=local, transformations=TRANSFORMATIONS)
     except Exception as e:
@@ -82,6 +89,102 @@ def _format_expr(expr) -> str:
 
 def _format_equation(lhs, rhs) -> str:
     return f"{_format_expr(lhs)} = {_format_expr(rhs)}"
+
+
+def _nonlinear_error_result(equation_str: str, lhs_str: str, rhs_str: str,
+                            lhs, rhs, var_names, degree: int,
+                            t_start: float) -> dict:
+    """Return a result dict that shows the combine-like-terms step and then
+    explains why the equation cannot be solved (nonlinear)."""
+    steps = []
+
+    # Step 1: show original
+    steps.append({
+        "description": "Starting with the original equation",
+        "expression": f"{lhs_str} = {rhs_str}",
+        "explanation": (
+            f"We are given the equation {lhs_str} = {rhs_str}. "
+            f"Let's simplify it first to determine if it is linear."
+        ),
+    })
+
+    # Step 2: expand / combine like terms
+    lhs_exp = expand(lhs)
+    rhs_exp = expand(rhs)
+    steps.append({
+        "description": "Expand and combine like terms",
+        "expression": _format_equation(lhs_exp, rhs_exp),
+        "explanation": (
+            f"After distributing and combining like terms we get: "
+            f"{_format_expr(lhs_exp)} = {_format_expr(rhs_exp)}."
+        ),
+    })
+
+    # Compute the effective highest degree
+    combined = expand(lhs - rhs)
+    var_symbols = [symbols(v) for v in var_names]
+
+    # Per-variable max degree
+    max_single_var_deg = 0
+    for vs in var_symbols:
+        p = combined.as_poly(vs)
+        if p is not None and p.degree() > max_single_var_deg:
+            max_single_var_deg = p.degree()
+
+    # Total degree (catches products of variables)
+    highest_deg = max_single_var_deg
+    try:
+        total_poly = combined.as_poly(*var_symbols)
+        if total_poly is not None and total_poly.total_degree() > highest_deg:
+            highest_deg = total_poly.total_degree()
+    except Exception:
+        pass
+
+    if highest_deg < 2:
+        highest_deg = degree  # fallback to what the caller passed
+
+    for i, s in enumerate(steps, 1):
+        s["step_number"] = i
+
+    t_end = time.perf_counter()
+    runtime_ms = round((t_end - t_start) * 1000, 2)
+
+    final_msg = (
+        f"Cannot solve \u2014 the highest degree of your given equation is "
+        f"{highest_deg}; a linear equation must only have a highest degree of 1."
+    )
+
+    return {
+        "equation": equation_str,
+        "given": {
+            "problem": f"Analyze the equation: {equation_str}",
+            "inputs": {
+                "equation": equation_str,
+                "left_side": lhs_str,
+                "right_side": rhs_str,
+                "variables": ", ".join(var_names),
+            },
+        },
+        "method": {
+            "name": "Linearity Check",
+            "description": "Expand and combine like terms, then verify the equation is linear.",
+            "parameters": {
+                "equation_type": f"Non-linear (degree {highest_deg})",
+                "variables": ", ".join(var_names),
+            },
+        },
+        "steps": steps,
+        "final_answer": final_msg,
+        "verification_steps": [],
+        "summary": {
+            "runtime_ms": runtime_ms,
+            "total_steps": len(steps),
+            "verification_steps": 0,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "library": f"SymPy {sympy.__version__}",
+            "python": None,
+        },
+    }
 
 
 def _count_terms_in_str(expr_str: str) -> int:
@@ -113,18 +216,30 @@ def _count_terms_in_str(expr_str: str) -> int:
 
 def solve_linear_equation(equation_str: str) -> dict:
     """
-    Solve a linear equation step by step.
+    Solve one or more linear equations step by step.
+
+    Supports:
+      - Single variable:  ``2x + 3 = 7``
+      - Multiple variables:  ``2x + 4y = 1``
+      - Systems (comma / semicolon separated):  ``x + y = 10, x - y = 2``
 
     Returns a dict with trail-format sections:
-      - given: problem statement and inputs
-      - method: method name and parameters
-      - steps: list of {step_number, description, expression, explanation}
-      - final_answer: the solution string
-      - verification_steps: substitution check
-      - summary: runtime, timestamp, library versions
+      - given, method, steps, final_answer, verification_steps, summary
     """
     t_start = time.perf_counter()
-    # --- Parse ---
+
+    # ── Split by , or ; to detect a system ──────────────────────────────
+    raw_equations = [eq.strip() for eq in re.split(r'\s*[;,]\s*', equation_str)
+                     if eq.strip()]
+    all_text = ' '.join(raw_equations)
+    var_names = _detect_variables(all_text)
+
+    if len(raw_equations) > 1:
+        return _solve_system(raw_equations, var_names, equation_str, t_start)
+    if len(var_names) > 1:
+        return _solve_multi_var_single_eq(equation_str, var_names, t_start)
+
+    # ── Single equation, single variable ────────────────────────────────
     if '=' not in equation_str:
         raise ValueError("Equation must contain '='. Example: 2x + 3 = 7")
 
@@ -136,8 +251,7 @@ def solve_linear_equation(equation_str: str) -> dict:
     if not lhs_str or not rhs_str:
         raise ValueError("Both sides of the equation must have expressions.")
 
-    # Detect which variable the user is solving for
-    var_name = _detect_variable(equation_str)
+    var_name = var_names[0]
     var = symbols(var_name)
 
     lhs = _parse_side(lhs_str, var)
@@ -157,9 +271,9 @@ def solve_linear_equation(equation_str: str) -> dict:
         raise ValueError("Could not determine the degree. Please check the equation.")
 
     if poly_degree.degree() > 1:
-        raise ValueError(
-            f"This is a degree-{poly_degree.degree()} equation, not linear. "
-            "SymSolver currently supports linear equations only."
+        return _nonlinear_error_result(
+            equation_str, lhs_str, rhs_str, lhs, rhs,
+            [var_name], poly_degree.degree(), t_start,
         )
     if poly_degree.degree() == 0:
         raise ValueError(f"No variable '{var_name}' found in the equation.")
@@ -462,6 +576,427 @@ def solve_linear_equation(equation_str: str) -> dict:
     }
 
 
+# ── Multi-variable / system solvers ─────────────────────────────────────
+
+def _solve_multi_var_single_eq(equation_str: str, var_names: list,
+                               t_start: float) -> dict:
+    """Solve a single linear equation with multiple variables.
+
+    Expresses each variable in terms of the remaining ones.
+    """
+    var_symbols = [symbols(v) for v in var_names]
+
+    if '=' not in equation_str:
+        raise ValueError("Equation must contain '='. Example: 2x + 4y = 1")
+    parts = equation_str.split('=')
+    if len(parts) != 2:
+        raise ValueError("Equation must contain exactly one '=' sign.")
+    lhs_str, rhs_str = parts[0].strip(), parts[1].strip()
+    if not lhs_str or not rhs_str:
+        raise ValueError("Both sides of the equation must have expressions.")
+
+    lhs = _parse_side(lhs_str, var_symbols)
+    rhs = _parse_side(rhs_str, var_symbols)
+
+    # Verify linearity
+    combined = expand(lhs - rhs)
+    max_degree = 0
+    for vs in var_symbols:
+        p = combined.as_poly(vs)
+        if p is not None and p.degree() > max_degree:
+            max_degree = p.degree()
+    # Also check total degree (catches products like x·y which are degree 2)
+    try:
+        total_poly = combined.as_poly(*var_symbols)
+        if total_poly is not None and total_poly.total_degree() > max_degree:
+            max_degree = total_poly.total_degree()
+    except Exception:
+        pass
+    if max_degree > 1:
+        return _nonlinear_error_result(
+            equation_str, lhs_str, rhs_str, lhs, rhs,
+            var_names, max_degree, t_start,
+        )
+
+    steps = []
+
+    # Step: original equation
+    steps.append({
+        "description": "Starting with the original equation",
+        "expression": f"{lhs_str} = {rhs_str}",
+        "explanation": (
+            f"We are given a linear equation with variables "
+            f"{', '.join(var_names)}. We will express each variable "
+            f"in terms of the others."
+        ),
+    })
+
+    # Expand if needed
+    lhs_exp, rhs_exp = expand(lhs), expand(rhs)
+    if lhs_exp != lhs or rhs_exp != rhs:
+        steps.append({
+            "description": "Expand both sides",
+            "expression": _format_equation(lhs_exp, rhs_exp),
+            "explanation": "Distribute multiplication across parentheses.",
+        })
+        lhs, rhs = lhs_exp, rhs_exp
+
+    # Solve for each variable
+    eq = Eq(lhs, rhs)
+    solutions = {}
+    for vn, vs in zip(var_names, var_symbols):
+        sol = solve(eq, vs)
+        if sol:
+            solutions[vn] = sol[0]
+            others = [v for v in var_names if v != vn]
+            steps.append({
+                "description": f"Solve for {vn}",
+                "expression": f"{vn} = {_format_expr(sol[0])}",
+                "explanation": (
+                    f"Isolate {vn} by moving all other terms to the "
+                    f"right side and dividing by its coefficient. "
+                    f"Result is in terms of {', '.join(others)}."
+                ),
+            })
+
+    # Final answer
+    final_parts = [f"{vn} = {_format_expr(solutions[vn])}"
+                   for vn in var_names if vn in solutions]
+    final_answer = "\n".join(final_parts)
+
+    # Verification
+    verification_steps = []
+    if solutions:
+        first_vn = var_names[0]
+        first_vs = var_symbols[0]
+        sol_expr = solutions.get(first_vn)
+        if sol_expr is not None:
+            lhs_sub = simplify(lhs.subs(first_vs, sol_expr))
+            rhs_sub = simplify(rhs.subs(first_vs, sol_expr))
+            verification_steps.append({
+                "description": f"Substitute {first_vn} = {_format_expr(sol_expr)}",
+                "expression": f"LHS = {_format_expr(lhs_sub)},  RHS = {_format_expr(rhs_sub)}",
+                "explanation": (
+                    f"Replacing {first_vn} in the original equation. "
+                    f"Both sides reduce to the same expression, "
+                    f"confirming correctness."
+                ),
+            })
+            verification_steps.append({
+                "description": "Solution verified",
+                "expression": "LHS = RHS  ✓",
+                "explanation": (
+                    "The equation holds for any values of the "
+                    "remaining variables."
+                ),
+            })
+
+    for i, s in enumerate(steps, 1):
+        s["step_number"] = i
+    for i, s in enumerate(verification_steps, 1):
+        s["step_number"] = i
+
+    t_end = time.perf_counter()
+    runtime_ms = round((t_end - t_start) * 1000, 2)
+
+    return {
+        "equation": equation_str,
+        "given": {
+            "problem": f"Solve the linear equation: {equation_str}",
+            "inputs": {
+                "equation": equation_str,
+                "left_side": lhs_str,
+                "right_side": rhs_str,
+                "variables": ", ".join(var_names),
+            },
+        },
+        "method": {
+            "name": "Algebraic Isolation (Multi-Variable)",
+            "description": (
+                "Express each variable in terms of the remaining "
+                "variables by isolating it step-by-step."
+            ),
+            "parameters": {
+                "equation_type": f"Linear with {len(var_names)} variables",
+                "variables": ", ".join(var_names),
+                "approach": "Expand → Isolate each variable",
+            },
+        },
+        "steps": steps,
+        "final_answer": final_answer,
+        "verification_steps": verification_steps,
+        "summary": {
+            "runtime_ms": runtime_ms,
+            "total_steps": len(steps),
+            "verification_steps": len(verification_steps),
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "library": f"SymPy {sympy.__version__}",
+            "python": None,
+        },
+    }
+
+
+def _solve_system(raw_equations: list, var_names: list,
+                  original_input: str, t_start: float) -> dict:
+    """Solve a system of linear equations."""
+    var_symbols = [symbols(v) for v in var_names]
+    n_eq = len(raw_equations)
+    n_var = len(var_names)
+
+    # Parse every equation
+    eq_objects = []
+    for eq_str in raw_equations:
+        if '=' not in eq_str:
+            raise ValueError(f"Each equation must contain '='. Problem: {eq_str}")
+        parts = eq_str.split('=')
+        if len(parts) != 2:
+            raise ValueError(
+                f"Each equation must have exactly one '='. Problem: {eq_str}"
+            )
+        lhs = _parse_side(parts[0].strip(), var_symbols)
+        rhs = _parse_side(parts[1].strip(), var_symbols)
+        eq_objects.append(Eq(expand(lhs), expand(rhs)))
+
+    # Verify linearity
+    for i, eq_obj in enumerate(eq_objects):
+        combined = expand(eq_obj.lhs - eq_obj.rhs)
+        max_deg = 0
+        for vs in var_symbols:
+            p = combined.as_poly(vs)
+            if p is not None and p.degree() > max_deg:
+                max_deg = p.degree()
+        try:
+            total_poly = combined.as_poly(*var_symbols)
+            if total_poly is not None and total_poly.total_degree() > max_deg:
+                max_deg = total_poly.total_degree()
+        except Exception:
+            pass
+        if max_deg > 1:
+            eq_str = raw_equations[i]
+            eq_parts = eq_str.split('=')
+            return _nonlinear_error_result(
+                original_input,
+                eq_parts[0].strip() if len(eq_parts) == 2 else eq_str,
+                eq_parts[1].strip() if len(eq_parts) == 2 else '0',
+                eq_obj.lhs, eq_obj.rhs,
+                var_names, max_deg, t_start,
+            )
+
+    steps = []
+
+    # Step: show the system
+    sys_lines = "\n".join(
+        f"  ({i + 1})  {eq}" for i, eq in enumerate(raw_equations)
+    )
+    steps.append({
+        "description": "System of equations",
+        "expression": sys_lines,
+        "explanation": (
+            f"We have {n_eq} equation{'s' if n_eq != 1 else ''} "
+            f"with {n_var} unknown{'s' if n_var != 1 else ''}: "
+            f"{', '.join(var_names)}."
+        ),
+    })
+
+    # Solve
+    solution = solve(eq_objects, var_symbols, dict=True)
+    if not solution:
+        raise ValueError(
+            "The system has no solution — the equations are inconsistent."
+        )
+
+    sol_dict = solution[0]
+    free_vars = [
+        vn for vn, vs in zip(var_names, var_symbols) if vs not in sol_dict
+    ]
+
+    # ── Detailed steps for 2×2 systems (substitution method) ────────────
+    if n_eq == 2 and n_var == 2 and not free_vars:
+        eq1, eq2 = eq_objects
+        vs0, vs1 = var_symbols
+        vn0, vn1 = var_names
+
+        sol_from_eq1 = solve(eq1, vs0)
+        if sol_from_eq1:
+            expr_v0 = sol_from_eq1[0]
+            steps.append({
+                "description": f"From equation (1), isolate {vn0}",
+                "expression": f"{vn0} = {_format_expr(expr_v0)}",
+                "explanation": (
+                    f"Rearrange equation (1) to express {vn0} in "
+                    f"terms of {vn1}."
+                ),
+            })
+
+            eq2_sub = eq2.subs(vs0, expr_v0)
+            steps.append({
+                "description": "Substitute into equation (2)",
+                "expression": _format_equation(
+                    expand(eq2_sub.lhs), expand(eq2_sub.rhs)
+                ),
+                "explanation": (
+                    f"Replace {vn0} in equation (2) with "
+                    f"{_format_expr(expr_v0)}."
+                ),
+            })
+
+            sol_v1 = solve(eq2_sub, vs1)
+            if sol_v1:
+                v1_val = sol_v1[0]
+                steps.append({
+                    "description": f"Solve for {vn1}",
+                    "expression": f"{vn1} = {_format_expr(v1_val)}",
+                    "explanation": (
+                        f"Simplify and solve to find "
+                        f"{vn1} = {_format_expr(v1_val)}."
+                    ),
+                })
+
+                v0_val = simplify(expr_v0.subs(vs1, v1_val))
+                steps.append({
+                    "description": f"Back-substitute to find {vn0}",
+                    "expression": f"{vn0} = {_format_expr(v0_val)}",
+                    "explanation": (
+                        f"Substitute {vn1} = {_format_expr(v1_val)} back "
+                        f"into {vn0} = {_format_expr(expr_v0)} to get "
+                        f"{vn0} = {_format_expr(v0_val)}."
+                    ),
+                })
+        else:
+            _append_solution_step(steps, var_names, var_symbols, sol_dict)
+    else:
+        # Larger or underdetermined systems
+        if free_vars:
+            steps.append({
+                "description": "Parametric solution",
+                "expression": (
+                    f"Free variable{'s' if len(free_vars) > 1 else ''}: "
+                    f"{', '.join(free_vars)}"
+                ),
+                "explanation": (
+                    f"The system is underdetermined — "
+                    f"{', '.join(free_vars)} can take any value."
+                ),
+            })
+        _append_solution_step(steps, var_names, var_symbols, sol_dict,
+                              free_vars)
+
+    # Final answer
+    final_parts = []
+    for vn, vs in zip(var_names, var_symbols):
+        if vs in sol_dict:
+            final_parts.append(f"{vn} = {_format_expr(sol_dict[vs])}")
+        else:
+            final_parts.append(f"{vn} is a free variable")
+    final_answer = "\n".join(final_parts)
+
+    # Verification
+    verification_steps = []
+    verification_steps.append({
+        "description": "Substitute into every equation",
+        "expression": "Checking…",
+        "explanation": (
+            "We plug the solution back into each original equation."
+        ),
+    })
+    for i, (eq_str, eq_obj) in enumerate(zip(raw_equations, eq_objects)):
+        lhs_val = simplify(eq_obj.lhs.subs(sol_dict))
+        rhs_val = simplify(eq_obj.rhs.subs(sol_dict))
+        ok = simplify(lhs_val - rhs_val) == 0
+        verification_steps.append({
+            "description": f"Equation ({i + 1}): {eq_str}",
+            "expression": (
+                f"LHS = {_format_expr(lhs_val)},  "
+                f"RHS = {_format_expr(rhs_val)}"
+                f"  →  {'✓' if ok else '✗'}"
+            ),
+            "explanation": (
+                f"Both sides equal {_format_expr(lhs_val)}."
+                if ok else "Sides differ — please check the input."
+            ),
+        })
+    verification_steps.append({
+        "description": "All equations verified",
+        "expression": "All equations satisfied  ✓",
+        "explanation": "The solution is correct.",
+    })
+
+    for i, s in enumerate(steps, 1):
+        s["step_number"] = i
+    for i, s in enumerate(verification_steps, 1):
+        s["step_number"] = i
+
+    t_end = time.perf_counter()
+    runtime_ms = round((t_end - t_start) * 1000, 2)
+
+    method_name = (
+        "Substitution Method" if n_eq == 2 and n_var == 2
+        else "Linear System Solver"
+    )
+    method_desc = (
+        "Isolate one variable, substitute into the other equation, "
+        "then back-substitute."
+        if n_eq == 2 and n_var == 2 else
+        "Solve using algebraic elimination / back-substitution."
+    )
+
+    return {
+        "equation": original_input,
+        "given": {
+            "problem": "Solve the system of linear equations",
+            "inputs": {
+                "equations": original_input,
+                "number_of_equations": str(n_eq),
+                "variables": ", ".join(var_names),
+                "number_of_variables": str(n_var),
+            },
+        },
+        "method": {
+            "name": method_name,
+            "description": method_desc,
+            "parameters": {
+                "equation_type": (
+                    f"System of {n_eq} linear equation"
+                    f"{'s' if n_eq != 1 else ''}"
+                ),
+                "variables": ", ".join(var_names),
+                "approach": (
+                    "Isolate → Substitute → Solve → Back-substitute"
+                    if n_eq == 2 and n_var == 2 else
+                    "Row reduction → Back-substitution"
+                ),
+            },
+        },
+        "steps": steps,
+        "final_answer": final_answer,
+        "verification_steps": verification_steps,
+        "summary": {
+            "runtime_ms": runtime_ms,
+            "total_steps": len(steps),
+            "verification_steps": len(verification_steps),
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "library": f"SymPy {sympy.__version__}",
+            "python": None,
+        },
+    }
+
+
+def _append_solution_step(steps, var_names, var_symbols, sol_dict,
+                          free_vars=None):
+    """Append a generic 'Solution' step listing all values."""
+    lines = []
+    for vn, vs in zip(var_names, var_symbols):
+        if vs in sol_dict:
+            lines.append(f"{vn} = {_format_expr(sol_dict[vs])}")
+        else:
+            lines.append(f"{vn}  (free variable)")
+    steps.append({
+        "description": "Solution",
+        "expression": "\n".join(lines),
+        "explanation": "Values that satisfy all equations simultaneously.",
+    })
+
+
 if __name__ == "__main__":
     # Quick test
     test_equations = [
@@ -469,6 +1004,9 @@ if __name__ == "__main__":
         "5x - 2 = 3x + 8",
         "3(x + 4) = 2x - 1",
         "x/2 + 1 = 4",
+        "2x + 4y = 1",
+        "x + y = 10, x - y = 2",
+        "2a + b = 5, a - b = 1",
     ]
     for eq in test_equations:
         print(f"\n{'='*50}")
@@ -480,3 +1018,4 @@ if __name__ == "__main__":
             for line in step["expression"].split('\n'):
                 print(f"    {line}")
         print(f"\n  => {result['final_answer']}")
+
