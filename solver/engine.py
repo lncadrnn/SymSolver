@@ -75,14 +75,75 @@ def _parse_side(expr_str: str, var_symbols):
         raise ValueError(f"Could not parse expression: '{expr_str}'. Error: {e}")
 
 
+_SUPERSCRIPT = str.maketrans("0123456789+-/()", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻ᐟ⁽⁾")
+
+
+def _to_superscript(text: str) -> str:
+    """Convert a string of digits / signs into Unicode superscript."""
+    return text.translate(_SUPERSCRIPT)
+
+
+# Fraction marker: ⟦numerator|denominator⟧
+# The GUI will parse these and render them as stacked vertical fractions.
+_FRAC_OPEN = "⟦"
+_FRAC_SEP  = "|"
+_FRAC_CLOSE = "⟧"
+
+
+def _frac(num, den) -> str:
+    """Return a fraction marker string for the GUI to render vertically."""
+    return f"{_FRAC_OPEN}{num}{_FRAC_SEP}{den}{_FRAC_CLOSE}"
+
+
 def _format_expr(expr) -> str:
-    """Format a SymPy expression into a readable string."""
+    """Format a SymPy expression into a readable string with Unicode
+    superscript exponents and stacked-fraction markers."""
     s = str(expr)
-    # Clean up SymPy formatting
-    s = s.replace('**', '^')
+
+    # Convert exponents (**N or **(-N) etc.) to superscript
+    def _sup_repl(m):
+        exp_text = m.group(1)
+        if exp_text.startswith("(") and exp_text.endswith(")"):
+            exp_text = exp_text[1:-1]
+        return _to_superscript(exp_text)
+
+    s = re.sub(r'\*\*\(([^)]+)\)', _sup_repl, s)
+    s = re.sub(r'\*\*(-?\d+)', _sup_repl, s)
+
     # Remove * between coefficient and variable (e.g. 2*x → 2x)
     s = re.sub(r'(\d)\*([A-Za-z])', r'\1\2', s)
+    # Remove * between closing paren and variable, or variable and opening paren
+    s = re.sub(r'\)\*([A-Za-z])', r')\1', s)
     # Replace any remaining * with ·
+    s = s.replace('*', '·')
+
+    # Convert fraction patterns to stacked-fraction markers ⟦num|den⟧
+    # Match (expr)/number  — e.g. (2x + 3)/5
+    def _paren_frac_repl(m):
+        return _frac(m.group(1), m.group(2))
+    s = re.sub(r'\(([^)]+)\)/(\d+)', _paren_frac_repl, s)
+
+    # Match simple fractions: token/number — e.g. x/2, 3/4, -1/2, 2x/3
+    def _simple_frac_repl(m):
+        return _frac(m.group(1), m.group(2))
+    s = re.sub(r'(-?[A-Za-z0-9·]+)/(\d+)', _simple_frac_repl, s)
+
+    return s
+
+
+def _format_expr_plain(expr) -> str:
+    """Like _format_expr but without fraction markers — for use as
+    denominators / inside explanations where nesting would break."""
+    s = str(expr)
+    def _sup_repl(m):
+        exp_text = m.group(1)
+        if exp_text.startswith("(") and exp_text.endswith(")"):
+            exp_text = exp_text[1:-1]
+        return _to_superscript(exp_text)
+    s = re.sub(r'\*\*\(([^)]+)\)', _sup_repl, s)
+    s = re.sub(r'\*\*(-?\d+)', _sup_repl, s)
+    s = re.sub(r'(\d)\*([A-Za-z])', r'\1\2', s)
+    s = re.sub(r'\)\*([A-Za-z])', r')\1', s)
     s = s.replace('*', '·')
     return s
 
@@ -484,14 +545,16 @@ def solve_linear_equation(equation_str: str) -> dict:
 
     if coeff != 1:
         coeff_str = _format_expr(coeff)
+        lhs_str_fmt = _format_expr(lhs)
+        rhs_str_fmt = _format_expr(rhs)
         steps.append({
             "description": f"Divide both sides by {coeff_str}",
-            "expression": f"{_format_expr(lhs)} / {coeff_str} = {_format_expr(rhs)} / {coeff_str}",
+            "expression": f"{_frac(lhs_str_fmt, coeff_str)} = {_frac(rhs_str_fmt, coeff_str)}",
             "explanation": (
                 f"The coefficient of {var_name} is {coeff_str}. "
                 f"To get {var_name} alone, we divide both sides by {coeff_str}. "
-                f"Dividing {_format_expr(lhs)} by {coeff_str} gives {var_name}, and "
-                f"dividing {_format_expr(rhs)} by {coeff_str} gives us the value."
+                f"Dividing {lhs_str_fmt} by {coeff_str} gives {var_name}, and "
+                f"dividing {rhs_str_fmt} by {coeff_str} gives us the value."
             ),
         })
         solution = simplify(rhs / coeff)

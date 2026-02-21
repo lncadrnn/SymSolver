@@ -5,6 +5,7 @@ A chat-style interface for solving linear equations step-by-step.
 Dark theme, scrollable solution area, and collapsible explanations.
 """
 
+import re
 import tkinter as tk
 from tkinter import ttk, font as tkfont
 import threading
@@ -48,6 +49,8 @@ class SymSolverApp(tk.Tk):
         self._title   = tkfont.Font(family="Segoe UI", size=22, weight="bold")
         self._mono    = tkfont.Font(family="Consolas", size=15)
         self._small   = tkfont.Font(family="Segoe UI", size=12)
+        self._frac    = tkfont.Font(family="Consolas", size=13)
+        self._frac_sm = tkfont.Font(family="Consolas", size=11)
 
         self._build_ui()
         self._show_welcome()
@@ -335,9 +338,10 @@ class SymSolverApp(tk.Tk):
         ans_inner = tk.Frame(ans_frame, bg="#0f1a0f", padx=16, pady=12)
         ans_inner.pack(fill=tk.X)
         for _ans_line in result["final_answer"].split("\n"):
-            tk.Label(ans_inner, text=_ans_line, font=self._mono,
-                     bg="#0f1a0f", fg=TEXT_BRIGHT, anchor="w"
-                     ).pack(fill=tk.X)
+            self._render_math_expr(ans_inner, _ans_line,
+                                   font=self._mono, bg="#0f1a0f",
+                                   fg=TEXT_BRIGHT
+                                   ).pack(fill=tk.X)
 
         # ── VERIFICATION ───────────────────────────────────────────────
         if result.get("verification_steps"):
@@ -388,6 +392,62 @@ class SymSolverApp(tk.Tk):
         card.pack(fill=tk.X)
         return card
 
+    # ── Fraction-aware math expression renderer ───────────────────────
+
+    # Pattern to split on fraction markers ⟦numerator|denominator⟧
+    _FRAC_RE = re.compile(r'⟦([^|⟧]+)\|([^⟧]+)⟧')
+
+    def _render_math_expr(self, parent: tk.Frame, text: str,
+                          font=None, bg: str = STEP_BG,
+                          fg: str = "#0F4C75") -> tk.Frame:
+        """Render *text* inside *parent*, replacing ⟦num|den⟧ markers
+        with stacked vertical fraction widgets.  Returns the container."""
+        if font is None:
+            font = self._mono
+
+        container = tk.Frame(parent, bg=bg)
+
+        # Handle multi-line expressions (e.g. system of equations)
+        lines = text.split("\n")
+        for line_text in lines:
+            line_frame = tk.Frame(container, bg=bg)
+            line_frame.pack(anchor="w")
+
+            parts = self._FRAC_RE.split(line_text)
+            # parts = [text, num, den, text, num, den, ...]
+            idx = 0
+            while idx < len(parts):
+                if idx % 3 == 0:
+                    # Regular text segment
+                    seg = parts[idx]
+                    if seg:
+                        tk.Label(line_frame, text=seg, font=font,
+                                 bg=bg, fg=fg).pack(side=tk.LEFT)
+                elif idx % 3 == 1:
+                    # Numerator (idx) and denominator (idx+1)
+                    num = parts[idx]
+                    den = parts[idx + 1] if idx + 1 < len(parts) else ""
+                    self._make_fraction_widget(line_frame, num, den, bg, fg)
+                    idx += 1  # skip denominator (consumed here)
+                idx += 1
+
+        return container
+
+    def _make_fraction_widget(self, parent: tk.Frame,
+                              numerator: str, denominator: str,
+                              bg: str, fg: str) -> None:
+        """Build a stacked fraction: numerator / line / denominator."""
+        frac_frame = tk.Frame(parent, bg=bg)
+        frac_frame.pack(side=tk.LEFT, padx=2)
+
+        tk.Label(frac_frame, text=numerator.strip(), font=self._frac,
+                 bg=bg, fg=fg).pack()
+        # fraction bar
+        bar = tk.Frame(frac_frame, bg=fg, height=2)
+        bar.pack(fill=tk.X, padx=2, pady=1)
+        tk.Label(frac_frame, text=denominator.strip(), font=self._frac,
+                 bg=bg, fg=fg).pack()
+
     # ── Step renderer ───────────────────────────────────────────────────
 
     def _render_step(self, parent: tk.Frame, step: dict) -> None:
@@ -404,9 +464,10 @@ class SymSolverApp(tk.Tk):
             desc = f"Step {step_num}:  {desc}"
         tk.Label(card, text=desc, font=self._bold,
                  bg=STEP_BG, fg=TEXT_BRIGHT, anchor="w").pack(fill=tk.X)
-        # expression
-        tk.Label(card, text=step["expression"], font=self._mono,
-                 bg=STEP_BG, fg=ACCENT, anchor="w").pack(fill=tk.X, pady=(2, 0))
+        # expression (with stacked fractions if present)
+        self._render_math_expr(card, step["expression"],
+                               font=self._mono, bg=STEP_BG, fg=ACCENT
+                               ).pack(fill=tk.X, pady=(2, 0))
 
         # explanation (collapsible)
         if step.get("explanation"):
