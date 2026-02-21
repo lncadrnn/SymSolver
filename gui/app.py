@@ -480,6 +480,12 @@ class SymSolverApp(tk.Tk):
 
             queue.append(_render_verify)
 
+        # ── GRAPH ─────────────────────────────────────────────────────
+        def _render_graph():
+            self._animate_graph(bot, result)
+
+        queue.append(_render_graph)
+
         # ── SUMMARY ────────────────────────────────────────────────────
         summary = result.get("summary", {})
         if summary:
@@ -489,12 +495,6 @@ class SymSolverApp(tk.Tk):
                     bot, summary, status))
 
             queue.append(_render_summary)
-
-        # ── GRAPH ─────────────────────────────────────────────────────
-        def _render_graph():
-            self._animate_graph(bot, result)
-
-        queue.append(_render_graph)
 
         # Final: re-enable input
         def _finish():
@@ -844,6 +844,29 @@ class SymSolverApp(tk.Tk):
 
     # ── Graph section ──────────────────────────────────────────────────
 
+    def _type_analysis_items(self, card, card_bg, items, idx, callback):
+        """Type analysis card fields one at a time, letter-by-letter."""
+        if idx >= len(items):
+            self._scroll_to_bottom()
+            if callback:
+                callback()
+            return
+
+        kind, text, color = items[idx]
+
+        def _next():
+            self._type_analysis_items(card, card_bg, items, idx + 1, callback)
+
+        if kind == "sep":
+            tk.Frame(card, bg=color, height=1).pack(fill=tk.X, pady=(8, 6))
+            _next()
+        elif kind == "bold":
+            self._type_label(card, text, self._bold, card_bg, color, callback=_next)
+        elif kind == "small":
+            self._type_label(card, text, self._small, card_bg, color, callback=_next)
+        elif kind == "mono":
+            self._type_label(card, text, self._mono, card_bg, color, callback=_next)
+
     # ── Case badge colours ──────────────────────────────────────────────
     _CASE_COLORS = {
         "one_solution":             {"bg": "#0d1f0d", "border": "#4caf50", "fg": "#4caf50"},
@@ -875,14 +898,14 @@ class SymSolverApp(tk.Tk):
         # The single toggleable content panel
         content = tk.Frame(container, bg=STEP_BG)
         drawn   = {"done": False}
-        visible = tk.BooleanVar(value=False)
+        visible = tk.BooleanVar(value=True)
 
-        def _build_content(c=content):
+        def _build_content(c=content, cb=None):
             if drawn["done"]:
                 return
             drawn["done"] = True
 
-            # ── Graph (top) ────────────────────────────────────────────
+            # ── Graph (top) — rendered immediately ────────────────────
             if fig is not None:
                 try:
                     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -895,75 +918,63 @@ class SymSolverApp(tk.Tk):
                     tk.Label(c, text=f"Graph error: {exc}", font=self._small,
                              bg=STEP_BG, fg=ERROR, anchor="w").pack(fill=tk.X, padx=8)
 
-            # ── Analysis card (below graph) ────────────────────────────
-            if analysis is not None:
-                colors = self._CASE_COLORS.get(
-                    analysis.get("case", ""),
-                    {"bg": STEP_BG, "border": ACCENT, "fg": ACCENT},
-                )
-                card_bg     = colors["bg"]
-                card_border = colors["border"]
-                card_fg     = colors["fg"]
+            # ── Analysis card (below graph) — typed letter by letter ───
+            if analysis is None:
+                if cb:
+                    cb()
+                return
 
-                outer = tk.Frame(c, bg=card_border, padx=1, pady=1)
-                outer.pack(fill=tk.X, padx=2, pady=(4, 8))
-                card = tk.Frame(outer, bg=card_bg, padx=16, pady=12)
-                card.pack(fill=tk.X)
+            colors = self._CASE_COLORS.get(
+                analysis.get("case", ""),
+                {"bg": STEP_BG, "border": ACCENT, "fg": ACCENT},
+            )
+            card_bg     = colors["bg"]
+            card_border = colors["border"]
+            card_fg     = colors["fg"]
 
-                # Case label
-                tk.Label(card, text=analysis["case_label"], font=self._bold,
-                         bg=card_bg, fg=card_fg, anchor="w").pack(fill=tk.X)
+            outer = tk.Frame(c, bg=card_border, padx=1, pady=1)
+            outer.pack(fill=tk.X, padx=2, pady=(4, 8))
+            card = tk.Frame(outer, bg=card_bg, padx=16, pady=12)
+            card.pack(fill=tk.X)
 
-                # General form
-                tk.Label(card, text="General form:", font=self._small,
-                         bg=card_bg, fg=TEXT_DIM, anchor="w").pack(fill=tk.X, pady=(6, 0))
-                for line in analysis["form"].split("\n"):
-                    tk.Label(card, text=f"  {line}", font=self._mono,
-                             bg=card_bg, fg=TEXT_BRIGHT, anchor="w").pack(fill=tk.X)
+            # Build ordered list of items to animate
+            items = [("bold", analysis["case_label"], card_fg)]
+            items.append(("small", "General form:", TEXT_DIM))
+            for line in analysis["form"].split("\n"):
+                items.append(("mono", f"  {line}", TEXT_BRIGHT))
+            items.append(("sep", None, card_border))
+            for line in analysis["description"].split("\n"):
+                items.append(("small", line, TEXT_DIM))
+            if analysis.get("detail"):
+                items.append(("mono", f"\n  Condition:  {analysis['detail']}", "#888888"))
+            if analysis.get("solution"):
+                items.append(("sep", None, card_border))
+                items.append(("bold", f"Result:  {analysis['solution']}", card_fg))
 
-                # Separator
-                tk.Frame(card, bg=card_border, height=1).pack(fill=tk.X, pady=(8, 6))
-
-                # Description
-                for line in analysis["description"].split("\n"):
-                    tk.Label(card, text=line, font=self._small,
-                             bg=card_bg, fg=TEXT_DIM, anchor="w",
-                             wraplength=860, justify=tk.LEFT).pack(fill=tk.X)
-
-                # Algebraic condition
-                if analysis.get("detail"):
-                    tk.Label(card, text=f"\n  Condition:  {analysis['detail']}",
-                             font=self._mono, bg=card_bg, fg="#888888",
-                             anchor="w").pack(fill=tk.X)
-
-                # Result line
-                if analysis.get("solution"):
-                    tk.Frame(card, bg=card_border, height=1).pack(fill=tk.X, pady=(8, 4))
-                    tk.Label(card, text=f"Result:  {analysis['solution']}",
-                             font=self._bold, bg=card_bg, fg=card_fg,
-                             anchor="w").pack(fill=tk.X)
+            self._type_analysis_items(card, card_bg, items, 0, cb)
 
         def _toggle(v=visible, c=content, b=None):
             if v.get():
                 c.pack_forget()
                 v.set(False)
-                b.configure(text="\U0001f4c8 Show Graph & Analysis")
+                b.configure(text="\u25b8 Show Graph & Analysis")
             else:
                 c.pack(fill=tk.X)
                 v.set(True)
-                b.configure(text="\U0001f4c8 Hide Graph & Analysis")
-                _build_content()
-                self._scroll_to_bottom()
+                b.configure(text="\u25be Hide Graph & Analysis")
+                _build_content(c)
 
         btn = tk.Button(
-            container, text="\U0001f4c8 Show Graph & Analysis", font=self._bold,
-            bg=BOT_BG, fg="#1a8cff", activebackground=BOT_BG,
-            activeforeground="#66b3ff", bd=0, cursor="hand2", anchor="w",
+            container, text="\u25be Hide Graph & Analysis", font=self._bold,
+            bg=BOT_BG, fg=SUCCESS, activebackground=BOT_BG,
+            activeforeground=SUCCESS, bd=0, cursor="hand2", anchor="w",
         )
         btn.configure(command=lambda b=btn: _toggle(b=b))
         btn.pack(anchor="w")
 
-        self._schedule_next()
+        # Show content immediately; animation chain drives _schedule_next
+        content.pack(fill=tk.X)
+        _build_content(cb=self._schedule_next)
 
     # ── Step renderer ───────────────────────────────────────────────────
     # (kept for potential non-animated use; main flow uses _animate_step)
