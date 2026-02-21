@@ -52,6 +52,8 @@ class SymSolverApp(tk.Tk):
         self._frac    = tkfont.Font(family="Consolas", size=13)
         self._frac_sm = tkfont.Font(family="Consolas", size=11)
 
+        self._auto_scroll: bool = True  # False while user has scrolled away from bottom
+
         self._build_ui()
         self._show_welcome()
 
@@ -190,8 +192,16 @@ class SymSolverApp(tk.Tk):
     def _on_mousewheel(self, event: tk.Event) -> None:
         if getattr(self, '_scroll_enabled', False):
             self._canvas.yview_scroll(int(-event.delta / 120), "units")
+            # Update auto-scroll based on whether we're at the bottom
+            try:
+                _, bottom = self._canvas.yview()
+                self._auto_scroll = bottom >= 0.99
+            except Exception:
+                pass
 
     def _scroll_to_bottom(self) -> None:
+        if not self._auto_scroll:
+            return
         self._canvas.update_idletasks()
         self._canvas.yview_moveto(1.0)
 
@@ -243,6 +253,7 @@ class SymSolverApp(tk.Tk):
         # Cancel any running animation
         self._anim_queue = []
         self._anim_idx = 0
+        self._auto_scroll = True
         for w in self._chat_frame.winfo_children():
             w.destroy()
         self._show_welcome()
@@ -256,6 +267,8 @@ class SymSolverApp(tk.Tk):
         equation = self._entry.get().strip()
         if not equation:
             return
+
+        self._auto_scroll = True  # re-enable for each new solve
 
         # remove welcome screen
         if hasattr(self, "_welcome_frame") and self._welcome_frame.winfo_exists():
