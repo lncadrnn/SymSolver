@@ -381,7 +381,13 @@ def _build_single_var(inputs, final):
         f_lhs = lambdify(x, lhs, modules="numpy")
         f_rhs = lambdify(x, rhs, modules="numpy")
         y_lhs = np.array(f_lhs(x_range), dtype=float)
-        y_rhs = np.full_like(x_range, float(f_rhs(0)), dtype=float)
+        # Evaluate RHS as a full function of x so diagonal RHS lines
+        # (e.g. 2x + 7) are plotted correctly, not collapsed to a constant.
+        _rhs_raw = f_rhs(x_range)
+        if np.ndim(_rhs_raw) == 0:          # RHS is a pure constant
+            y_rhs = np.full_like(x_range, float(_rhs_raw), dtype=float)
+        else:
+            y_rhs = np.array(_rhs_raw, dtype=float)
     except Exception:
         return None
 
@@ -393,14 +399,14 @@ def _build_single_var(inputs, final):
     label_rhs = f"RHS: {inputs.get('right_side', 'g(x)')}"
 
     ax.plot(x_range, y_lhs, color=C_LINE1, linewidth=2, label=label_lhs)
-    ax.plot(x_range, y_rhs, color=C_HLINE,  linewidth=2, linestyle="--", label=label_rhs)
+    ax.plot(x_range, y_rhs, color=C_LINE2,  linewidth=2, label=label_rhs)
 
     if anomaly == "no_solution":
         ax.set_title("No Solution — Lines are parallel", color=C_TEXT, fontsize=10)
     elif anomaly == "infinite":
         ax.set_title("Infinite Solutions — Lines overlap", color=C_TEXT, fontsize=10)
     elif sol_val is not None:
-        y_at_sol = float(f_rhs(0))
+        y_at_sol = float(f_rhs(sol_val))
         ax.scatter([sol_val], [y_at_sol], color=C_DOT, s=80, zorder=5,
                    label=f"Solution: {var_name} = {sol_val:g}")
         ax.axvline(sol_val, color=C_DOT, linewidth=1, linestyle=":", alpha=0.6)

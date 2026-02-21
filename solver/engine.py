@@ -366,20 +366,21 @@ def solve_linear_equation(equation_str: str) -> dict:
     poly_degree = combined_expanded.as_poly(var)
     if poly_degree is None:
         if var not in combined_expanded.free_symbols:
-            val = simplify(combined_expanded)
-            if val == 0:
-                raise ValueError("This equation is always true (identity). Infinite solutions.")
-            else:
-                raise ValueError("This equation has no solution (contradiction).")
-        raise ValueError("Could not determine the degree. Please check the equation.")
-
-    if poly_degree.degree() > 1:
+            # Degenerate: variable was present in the original text but
+            # fully cancelled out.  Let the step-by-step algebra run and
+            # show what happened — step 4 will detect and explain it.
+            pass
+        else:
+            raise ValueError("Could not determine the degree. Please check the equation.")
+    elif poly_degree.degree() > 1:
         return _nonlinear_error_result(
             equation_str, lhs_str, rhs_str, lhs, rhs,
             [var_name], poly_degree.degree(), t_start,
         )
-    if poly_degree.degree() == 0:
-        raise ValueError(f"No variable '{var_name}' found in the equation.")
+    elif poly_degree.degree() == 0:
+        # Non-zero constant: variable present in input but fully cancelled
+        # (e.g. 2x - 4 = 2x + 7 → -11 = 0).  Same treatment as above.
+        pass
 
     steps = []
     original_lhs_str = equation_str.split('=')[0].strip()
@@ -557,7 +558,85 @@ def solve_linear_equation(equation_str: str) -> dict:
     # --- Step 4: Divide both sides by the coefficient of the variable ---
     coeff = lhs.coeff(var)
     if coeff == 0:
-        raise ValueError(f"After simplification, {var_name} disappeared. The equation may have no unique solution.")
+        # The variable cancelled out — degenerate equation.
+        rhs_val = simplify(rhs)
+        is_identity = (rhs_val == 0)
+
+        if is_identity:
+            final_stmt = "0 = 0"
+            degenerate_step = {
+                "description": "The variable cancels — identity",
+                "expression": "0 = 0",
+                "explanation": (
+                    f"After combining like terms, {var_name} disappears from both sides "
+                    f"and we are left with  0 = 0, which is always true.\n"
+                    f"This means the equation is an identity: every real number "
+                    f"satisfies it, so there are infinitely many solutions."
+                ),
+            }
+            final_answer = (
+                f"Infinite solutions — this equation is an identity.\n"
+                f"Every real number satisfies {original_lhs_str} = {original_rhs_str}."
+            )
+        else:
+            rhs_str_val = _format_expr(rhs_val)
+            degenerate_step = {
+                "description": "The variable cancels — contradiction",
+                "expression": f"0 = {rhs_str_val}",
+                "explanation": (
+                    f"After combining like terms, {var_name} disappears from both sides "
+                    f"and we are left with  0 = {rhs_str_val}, which is never true.\n"
+                    f"This means the equation is a contradiction: no value of "
+                    f"{var_name} can ever satisfy it, so there is no solution."
+                ),
+            }
+            final_answer = (
+                f"No solution — this equation is a contradiction.\n"
+                f"Simplifies to  0 = {rhs_str_val},  which is impossible."
+            )
+
+        steps.append(degenerate_step)
+        for i, step in enumerate(steps, start=1):
+            step["step_number"] = i
+
+        t_end = time.perf_counter()
+        runtime_ms = round((t_end - t_start) * 1000, 2)
+
+        given = {
+            "problem": f"Solve the linear equation: {equation_str}",
+            "inputs": {
+                "equation": equation_str,
+                "left_side": original_lhs_str,
+                "right_side": original_rhs_str,
+                "variable": var_name,
+            },
+        }
+        method = {
+            "name": "Algebraic Isolation (Linear — Degenerate)",
+            "description": "Isolate the variable by performing inverse operations step-by-step.",
+            "parameters": {
+                "equation_type": "Linear (degree 1) — Degenerate",
+                "variable": var_name,
+                "approach": "Expand → Collect like terms → Detect degenerate case",
+            },
+        }
+        summary = {
+            "runtime_ms": runtime_ms,
+            "total_steps": len(steps),
+            "verification_steps": 0,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "library": f"SymPy {sympy.__version__}",
+            "python": None,
+        }
+        return {
+            "equation": equation_str,
+            "given": given,
+            "method": method,
+            "steps": steps,
+            "final_answer": final_answer,
+            "verification_steps": [],
+            "summary": summary,
+        }
 
     if coeff != 1:
         coeff_str = _format_expr(coeff)
