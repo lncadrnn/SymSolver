@@ -87,15 +87,35 @@ class SymSolverApp(tk.Tk):
         chat_wrapper = tk.Frame(self, bg=BG)
         chat_wrapper.pack(fill=tk.BOTH, expand=True)
 
+        # Custom dark scrollbar style
+        style = ttk.Style()
+        style.theme_use("default")
+        style.configure("Dark.Vertical.TScrollbar",
+                        background="#2a2a2a", troughcolor=BG,
+                        bordercolor=BG, arrowcolor="#555555",
+                        relief=tk.FLAT, borderwidth=0)
+        style.map("Dark.Vertical.TScrollbar",
+                  background=[("active", "#444444"), ("!active", "#2a2a2a")],
+                  arrowcolor=[("active", "#888888"), ("!active", "#555555")])
+        style.layout("Dark.Vertical.TScrollbar", [
+            ("Vertical.Scrollbar.trough", {
+                "sticky": "ns",
+                "children": [
+                    ("Vertical.Scrollbar.thumb", {"expand": 1, "sticky": "nswe"})
+                ]
+            })
+        ])
+
         self._canvas = tk.Canvas(chat_wrapper, bg=BG, highlightthickness=0)
         self._scrollbar = ttk.Scrollbar(
             chat_wrapper, orient=tk.VERTICAL, command=self._canvas.yview,
+            style="Dark.Vertical.TScrollbar",
         )
         self._chat_frame = tk.Frame(self._canvas, bg=BG)
 
         self._chat_frame.bind(
             "<Configure>",
-            lambda _: self._canvas.configure(scrollregion=self._canvas.bbox("all")),
+            lambda _: self._update_scroll_region(),
         )
         self._canvas_window = self._canvas.create_window(
             (0, 0), window=self._chat_frame, anchor="nw",
@@ -137,9 +157,28 @@ class SymSolverApp(tk.Tk):
 
     def _on_canvas_resize(self, event: tk.Event) -> None:
         self._canvas.itemconfig(self._canvas_window, width=event.width)
+        self._update_scroll_region()
+
+    def _update_scroll_region(self) -> None:
+        """Update scroll region and show/hide scrollbar based on content."""
+        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
+        self._canvas.update_idletasks()
+        content_h = self._chat_frame.winfo_reqheight()
+        canvas_h = self._canvas.winfo_height()
+        if content_h <= canvas_h:
+            # Content fits — hide scrollbar and lock scroll position
+            self._scrollbar.pack_forget()
+            self._canvas.yview_moveto(0.0)
+            self._scroll_enabled = False
+        else:
+            # Content overflows — show scrollbar
+            if not self._scrollbar.winfo_ismapped():
+                self._scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            self._scroll_enabled = True
 
     def _on_mousewheel(self, event: tk.Event) -> None:
-        self._canvas.yview_scroll(int(-event.delta / 120), "units")
+        if getattr(self, '_scroll_enabled', False):
+            self._canvas.yview_scroll(int(-event.delta / 120), "units")
 
     def _scroll_to_bottom(self) -> None:
         self._canvas.update_idletasks()
@@ -149,12 +188,8 @@ class SymSolverApp(tk.Tk):
 
     def _show_welcome(self) -> None:
         self._welcome_frame = tk.Frame(self._chat_frame, bg=BG)
-        self._welcome_frame.pack(fill=tk.BOTH, expand=True, pady=50)
+        self._welcome_frame.pack(fill=tk.BOTH, expand=True, pady=(100, 50))
 
-        tk.Label(
-            self._welcome_frame, text="⬡", font=tkfont.Font(size=56),
-            bg=BG, fg=ACCENT,
-        ).pack()
         tk.Label(
             self._welcome_frame, text="Welcome to SymSolver",
             font=self._title, bg=BG, fg=TEXT_BRIGHT,
@@ -175,9 +210,7 @@ class SymSolverApp(tk.Tk):
             font=self._bold, bg=BG, fg=TEXT_DIM,
         ).pack(pady=(0, 6))
 
-        examples = ["2x + 3 = 7", "5y - 2 = 3y + 8",
-                     "2x + 4y = 1",
-                     "x + y = 10, x - y = 2"]
+        examples = ["2x + 3 = 7", "x + y = 10, x - y = 2"]
         for eq in examples:
             btn = tk.Button(
                 self._welcome_frame, text=eq, font=self._mono,
