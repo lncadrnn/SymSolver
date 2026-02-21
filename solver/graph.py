@@ -101,7 +101,9 @@ def analyze_result(result: dict) -> dict | None:
       graphable : bool
     """
     given  = result.get("given", {})
-    inputs = given.get("inputs", {})
+    inputs = dict(given.get("inputs", {}))
+    # Inject raw equation so analysis parsers get a standard math string.
+    inputs["raw_equation"] = result.get("equation", "")
     final  = result.get("final_answer", "")
 
     if "equations" in inputs:
@@ -346,7 +348,10 @@ def build_figure(result: dict):
     from matplotlib.figure import Figure
 
     given  = result.get("given", {})
-    inputs = given.get("inputs", {})
+    inputs = dict(given.get("inputs", {}))
+    # Inject the raw (unformatted) equation from the top-level result so
+    # graph parsers always receive a standard math string, never display markers.
+    inputs["raw_equation"] = result.get("equation", "")
     final  = result.get("final_answer", "")
 
     # ── Detect case ────────────────────────────────────────────────────

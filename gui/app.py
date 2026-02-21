@@ -493,11 +493,13 @@ class SymSolverApp(tk.Tk):
 
             queue.append(_render_verify)
 
-        # ── GRAPH ─────────────────────────────────────────────────────
-        def _render_graph():
-            self._animate_graph(bot, result)
+        # ── GRAPH (skip for non-linear equations) ─────────────────────
+        _method_name = result.get("method", {}).get("name", "")
+        if "Linearity Check" not in _method_name:
+            def _render_graph():
+                self._animate_graph(bot, result)
 
-        queue.append(_render_graph)
+            queue.append(_render_graph)
 
         # ── SUMMARY ────────────────────────────────────────────────────
         summary = result.get("summary", {})

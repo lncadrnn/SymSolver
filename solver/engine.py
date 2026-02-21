@@ -175,12 +175,17 @@ def _nonlinear_error_result(equation_str: str, lhs_str: str, rhs_str: str,
     explains why the equation cannot be solved (nonlinear)."""
     steps = []
 
+    # Cache formatted originals
+    _fmt_nl_lhs = _format_expr(lhs)
+    _fmt_nl_rhs = _format_expr(rhs)
+    _fmt_nl_eq  = _format_equation(lhs, rhs)
+
     # Step 1: show original
     steps.append({
         "description": "Starting with the original equation",
-        "expression": f"{lhs_str} = {rhs_str}",
+        "expression": _fmt_nl_eq,
         "explanation": (
-            f"We are given the equation {lhs_str} = {rhs_str}. "
+            f"We are given the equation {_format_expr_plain(lhs)} = {_format_expr_plain(rhs)}. "
             f"Let's simplify it first to determine if it is linear."
         ),
     })
@@ -234,12 +239,12 @@ def _nonlinear_error_result(equation_str: str, lhs_str: str, rhs_str: str,
     return {
         "equation": equation_str,
         "given": {
-            "problem": f"Analyze the equation: {equation_str}",
+            "problem": f"Analyze the equation: {_fmt_nl_eq}",
             "inputs": {
-                "equation": equation_str,
-                "left_side": lhs_str,
-                "right_side": rhs_str,
-                "variables": ", ".join(var_names),
+                "equation":   _fmt_nl_eq,
+                "left_side":  _fmt_nl_lhs,
+                "right_side": _fmt_nl_rhs,
+                "variables":  ", ".join(var_names),
             },
         },
         "method": {
@@ -612,11 +617,10 @@ def solve_linear_equation(equation_str: str) -> dict:
         given = {
             "problem": f"Solve the linear equation: {_fmt_orig_eq}",
             "inputs": {
-                "equation":     _fmt_orig_eq,
-                "raw_equation": equation_str,
-                "left_side":    _fmt_orig_lhs,
-                "right_side":   _fmt_orig_rhs,
-                "variable":     var_name,
+                "equation":   _fmt_orig_eq,
+                "left_side":  _fmt_orig_lhs,
+                "right_side": _fmt_orig_rhs,
+                "variable":   var_name,
             },
         }
         method = {
@@ -740,11 +744,10 @@ def solve_linear_equation(equation_str: str) -> dict:
     given = {
         "problem": f"Solve the linear equation: {_fmt_orig_eq}",
         "inputs": {
-            "equation":     _fmt_orig_eq,
-            "raw_equation": equation_str,
-            "left_side":    _fmt_orig_lhs,
-            "right_side":   _fmt_orig_rhs,
-            "variable":     var_name,
+            "equation":   _fmt_orig_eq,
+            "left_side":  _fmt_orig_lhs,
+            "right_side": _fmt_orig_rhs,
+            "variable":   var_name,
         },
     }
 
@@ -936,11 +939,10 @@ def _solve_multi_var_single_eq(equation_str: str, var_names: list,
         "given": {
             "problem": f"Solve the linear equation: {_fmt_mv_eq}",
             "inputs": {
-                "equation":     _fmt_mv_eq,
-                "raw_equation": equation_str,
-                "left_side":    _fmt_mv_lhs,
-                "right_side":   _fmt_mv_rhs,
-                "variables":    ", ".join(var_names),
+                "equation":   _fmt_mv_eq,
+                "left_side":  _fmt_mv_lhs,
+                "right_side": _fmt_mv_rhs,
+                "variables":  ", ".join(var_names),
             },
         },
         "method": {
