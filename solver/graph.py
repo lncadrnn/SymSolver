@@ -32,6 +32,10 @@ C_TEXT     = "#cccccc"
 
 def _parse_eq(eq_str):
     """Return (lhs_expr, rhs_expr) as SymPy expressions."""
+    # Strip any display-only fraction markers (⟦num|den⟧ → (num)/den)
+    eq_str = re.sub(r'⟦([^|⟧]+)\|([^⟧]+)⟧', r'(\1)/\2', eq_str)
+    # Strip middle-dot used instead of * for display
+    eq_str = eq_str.replace('·', '*')
     sides = eq_str.split("=")
     if len(sides) != 2:
         raise ValueError("Equation must contain exactly one '='")
@@ -112,7 +116,7 @@ def analyze_result(result: dict) -> dict | None:
 
 
 def _analyze_single_var(inputs, final) -> dict:
-    eq_str   = inputs.get("equation", "?")
+    eq_str   = inputs.get("raw_equation") or inputs.get("equation", "?")
     var_name = inputs.get("variable", "x")
     v        = var_name
 
@@ -170,7 +174,7 @@ def _analyze_single_var(inputs, final) -> dict:
 
 
 def _analyze_two_var(inputs, final) -> dict:
-    eq_str   = inputs.get("equation", "?")
+    eq_str   = inputs.get("raw_equation") or inputs.get("equation", "?")
     var_list = [v.strip() for v in inputs.get("variables", "x, y").split(",")]
     xn       = var_list[0] if len(var_list) > 0 else "x"
     yn       = var_list[1] if len(var_list) > 1 else "y"
@@ -382,7 +386,7 @@ def build_figure(result: dict):
 def _build_single_var(inputs, final):
     from matplotlib.figure import Figure
 
-    eq_str = inputs.get("equation", "")
+    eq_str = inputs.get("raw_equation") or inputs.get("equation", "")
     var_name = inputs.get("variable", "x")
 
     try:
@@ -457,7 +461,7 @@ def _build_single_var(inputs, final):
 def _build_two_var(inputs, final):
     from matplotlib.figure import Figure
 
-    eq_str   = inputs.get("equation", "")
+    eq_str   = inputs.get("raw_equation") or inputs.get("equation", "")
     var_list = [v.strip() for v in inputs.get("variables", "x, y").split(",")]
     if len(var_list) < 2:
         return _text_figure(f"Equation: {eq_str}", "Need at least 2 variables to plot")
@@ -534,7 +538,7 @@ def _build_multi_var_projection(inputs, final):
         return _text_figure("3+ Variable Equation",
                             "Too many variables to display in 2D.\nShowing first two variables.")
     # Build a fake two-var inputs dict for the first two variables
-    eq_str = inputs.get("equation", "")
+    eq_str   = inputs.get("raw_equation") or inputs.get("equation", "")
     fake_inputs = {"equation": eq_str, "variables": f"{var_list[0]}, {var_list[1]}"}
     result = _build_two_var(fake_inputs, final)
     if result is None:

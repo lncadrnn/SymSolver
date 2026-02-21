@@ -612,10 +612,11 @@ def solve_linear_equation(equation_str: str) -> dict:
         given = {
             "problem": f"Solve the linear equation: {_fmt_orig_eq}",
             "inputs": {
-                "equation":   _fmt_orig_eq,
-                "left_side":  _fmt_orig_lhs,
-                "right_side": _fmt_orig_rhs,
-                "variable":   var_name,
+                "equation":     _fmt_orig_eq,
+                "raw_equation": equation_str,
+                "left_side":    _fmt_orig_lhs,
+                "right_side":   _fmt_orig_rhs,
+                "variable":     var_name,
             },
         }
         method = {
@@ -739,10 +740,11 @@ def solve_linear_equation(equation_str: str) -> dict:
     given = {
         "problem": f"Solve the linear equation: {_fmt_orig_eq}",
         "inputs": {
-            "equation":   _fmt_orig_eq,
-            "left_side":  _fmt_orig_lhs,
-            "right_side": _fmt_orig_rhs,
-            "variable":   var_name,
+            "equation":     _fmt_orig_eq,
+            "raw_equation": equation_str,
+            "left_side":    _fmt_orig_lhs,
+            "right_side":   _fmt_orig_rhs,
+            "variable":     var_name,
         },
     }
 
@@ -934,10 +936,11 @@ def _solve_multi_var_single_eq(equation_str: str, var_names: list,
         "given": {
             "problem": f"Solve the linear equation: {_fmt_mv_eq}",
             "inputs": {
-                "equation":   _fmt_mv_eq,
-                "left_side":  _fmt_mv_lhs,
-                "right_side": _fmt_mv_rhs,
-                "variables":  ", ".join(var_names),
+                "equation":     _fmt_mv_eq,
+                "raw_equation": equation_str,
+                "left_side":    _fmt_mv_lhs,
+                "right_side":   _fmt_mv_rhs,
+                "variables":    ", ".join(var_names),
             },
         },
         "method": {
