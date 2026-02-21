@@ -124,7 +124,7 @@ def _analyze_single_var(inputs, final) -> dict:
             ),
             "detail":   f"a = 0,  b = 0   →   0 = 0  (always true)",
             "solution": f"All real numbers (∞ solutions)",
-            "graphable": False,
+            "graphable": True,
         }
     # Normal case — extract solution
     sol_str = ""

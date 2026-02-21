@@ -891,12 +891,18 @@ class SymSolverApp(tk.Tk):
 
     def _animate_graph(self, parent, result):
         """Collapsible Graph & Analysis panel — graph on top, analysis card below."""
+        # Analyse — always attempt; sets analysis card data
         try:
-            from solver.graph import build_figure, analyze_result
+            from solver.graph import analyze_result
             analysis = analyze_result(result)
-            fig = build_figure(result) if (analysis and analysis.get("graphable")) else None
         except Exception:
             analysis = None
+
+        # Build figure — attempt independently so a graph error doesn't hide the card
+        try:
+            from solver.graph import build_figure
+            fig = build_figure(result)
+        except Exception:
             fig = None
 
         if analysis is None and fig is None:
