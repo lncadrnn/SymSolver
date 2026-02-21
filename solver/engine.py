@@ -1010,9 +1010,96 @@ def _solve_system(raw_equations: list, var_names: list,
     # Solve
     solution = solve(eq_objects, var_symbols, dict=True)
     if not solution:
-        raise ValueError(
-            "The system has no solution — the equations are inconsistent."
-        )
+        # Show elimination steps to expose the contradiction, then return
+        # a proper result dict instead of raising an error.
+        if n_eq >= 2:
+            eq1, eq2 = eq_objects[0], eq_objects[1]
+            raw1, raw2 = raw_equations[0], raw_equations[1]
+
+            # Show the subtraction operation
+            steps.append({
+                "description": "Subtract equation (1) from equation (2)",
+                "expression": (
+                    f"({_format_expr(eq2.lhs)}) \u2212 ({_format_expr(eq1.lhs)})"
+                    f" = ({_format_expr(eq2.rhs)}) \u2212 ({_format_expr(eq1.rhs)})"
+                ),
+                "explanation": (
+                    f"To eliminate the variables, subtract equation (1) "
+                    f"from equation (2). Whatever is on the left of (1) "
+                    f"is subtracted from the left of (2), and same for the right."
+                ),
+            })
+
+            diff_lhs = expand(eq2.lhs - eq1.lhs)
+            diff_rhs = expand(eq2.rhs - eq1.rhs)
+            diff_lhs_str = _format_expr(diff_lhs)
+            diff_rhs_str = _format_expr(diff_rhs)
+
+            steps.append({
+                "description": "Simplify both sides",
+                "expression": f"{diff_lhs_str} = {diff_rhs_str}",
+                "explanation": (
+                    f"After subtracting, all variable terms cancel on the "
+                    f"left side, leaving {diff_lhs_str} = {diff_rhs_str}."
+                ),
+            })
+
+            steps.append({
+                "description": "Contradiction \u2014 No Solution",
+                "expression": f"{diff_lhs_str} = {diff_rhs_str}",
+                "explanation": (
+                    f"The statement {diff_lhs_str} = {diff_rhs_str} is never true.\n"
+                    f"All variables cancelled out but the constants do not match, "
+                    f"so the system has no solution.\n"
+                    f"Geometrically, the equations represent parallel lines "
+                    f"that never intersect."
+                ),
+            })
+
+        for i, s in enumerate(steps, 1):
+            s["step_number"] = i
+
+        t_end = time.perf_counter()
+        runtime_ms = round((t_end - t_start) * 1000, 2)
+
+        return {
+            "equation": original_input,
+            "given": {
+                "problem": "Solve the system of linear equations",
+                "inputs": {
+                    "equations": original_input,
+                    "number_of_equations": str(n_eq),
+                    "variables": ", ".join(var_names),
+                    "number_of_variables": str(n_var),
+                },
+            },
+            "method": {
+                "name": "Elimination Method (Inconsistent System)",
+                "description": (
+                    "Subtract equations to eliminate variables and "
+                    "expose the contradiction."
+                ),
+                "parameters": {
+                    "equation_type": "Linear System — No Solution",
+                    "variables": ", ".join(var_names),
+                    "approach": "Elimination \u2192 Detect contradiction",
+                },
+            },
+            "steps": steps,
+            "final_answer": (
+                "No solution \u2014 the system is inconsistent.\n"
+                "The equations represent parallel lines that never intersect."
+            ),
+            "verification_steps": [],
+            "summary": {
+                "runtime_ms": runtime_ms,
+                "total_steps": len(steps),
+                "verification_steps": 0,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "library": f"SymPy {sympy.__version__}",
+                "python": None,
+            },
+        }
 
     sol_dict = solution[0]
     free_vars = [

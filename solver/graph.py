@@ -59,6 +59,27 @@ def _style_axes(ax, fig):
     ax.axvline(0, color=C_SPINE, linewidth=0.8)
 
 
+def _text_figure(title: str, message: str = ""):
+    """Last-resort figure: dark canvas with centred text."""
+    from matplotlib.figure import Figure
+    fig = Figure(figsize=(7, 3.4), dpi=100)
+    fig.patch.set_facecolor(C_BG)
+    ax = fig.add_subplot(111)
+    ax.set_facecolor(C_BG)
+    ax.set_xticks([]); ax.set_yticks([])
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.text(0.5, 0.6, title, transform=ax.transAxes,
+            ha="center", va="center", fontsize=12,
+            color=C_TEXT, fontweight="bold")
+    if message:
+        ax.text(0.5, 0.38, message, transform=ax.transAxes,
+                ha="center", va="center", fontsize=9,
+                color=C_TICK, wrap=True)
+    fig.tight_layout(pad=1.2)
+    return fig
+
+
 def analyze_result(result: dict) -> dict | None:
     """
     Return a structured analysis dict describing the mathematical case,
@@ -325,22 +346,35 @@ def build_figure(result: dict):
     final  = result.get("final_answer", "")
 
     # ── Detect case ────────────────────────────────────────────────────
-    if "equations" in inputs:
-        # System of two equations
-        return _build_system(inputs, final)
+    try:
+        if "equations" in inputs:
+            fig = _build_system(inputs, final)
+        elif "variable" in inputs and "variables" not in inputs:
+            fig = _build_single_var(inputs, final)
+        elif "variables" in inputs:
+            var_list = [v.strip() for v in inputs["variables"].split(",")]
+            if len(var_list) == 2:
+                fig = _build_two_var(inputs, final)
+            else:
+                # >2 variables — project onto first two
+                fig = _build_multi_var_projection(inputs, final)
+        else:
+            fig = None
+    except Exception:
+        fig = None
 
-    if "variable" in inputs and "variables" not in inputs:
-        # Single-variable equation
-        return _build_single_var(inputs, final)
-
-    if "variables" in inputs:
-        var_list = [v.strip() for v in inputs["variables"].split(",")]
-        if len(var_list) == 2:
-            return _build_two_var(inputs, final)
-        # >2 variables — not graphable in 2-D
-        return None
-
-    return None
+    if fig is None:
+        # Always return something — never leave the user with no graph
+        eq_label = (
+            inputs.get("equations") or
+            inputs.get("equation") or
+            result.get("equation", "")
+        )
+        fig = _text_figure(
+            "Graph not available",
+            f"Could not plot:  {eq_label}"
+        )
+    return fig
 
 
 # ── Single-variable ─────────────────────────────────────────────────────────
@@ -355,7 +389,7 @@ def _build_single_var(inputs, final):
         lhs, rhs, local = _parse_eq(eq_str)
         x = local.get(var_name, symbols(var_name))
     except Exception:
-        return None
+        return _text_figure(f"Equation: {eq_str}", "Could not parse equation for graphing")
 
     # Determine solution value
     sol_val = None
@@ -381,15 +415,13 @@ def _build_single_var(inputs, final):
         f_lhs = lambdify(x, lhs, modules="numpy")
         f_rhs = lambdify(x, rhs, modules="numpy")
         y_lhs = np.array(f_lhs(x_range), dtype=float)
-        # Evaluate RHS as a full function of x so diagonal RHS lines
-        # (e.g. 2x + 7) are plotted correctly, not collapsed to a constant.
         _rhs_raw = f_rhs(x_range)
-        if np.ndim(_rhs_raw) == 0:          # RHS is a pure constant
+        if np.ndim(_rhs_raw) == 0:
             y_rhs = np.full_like(x_range, float(_rhs_raw), dtype=float)
         else:
             y_rhs = np.array(_rhs_raw, dtype=float)
     except Exception:
-        return None
+        return _text_figure(f"Equation: {eq_str}", "Could not evaluate equation for graphing")
 
     fig = Figure(figsize=(7, 3.4), dpi=100)
     ax  = fig.add_subplot(111)
@@ -428,31 +460,52 @@ def _build_two_var(inputs, final):
     eq_str   = inputs.get("equation", "")
     var_list = [v.strip() for v in inputs.get("variables", "x, y").split(",")]
     if len(var_list) < 2:
-        return None
+        return _text_figure(f"Equation: {eq_str}", "Need at least 2 variables to plot")
     xn, yn = var_list[0], var_list[1]
 
     try:
         lhs, rhs, local = _parse_eq(eq_str)
-        xsym = local[xn]; ysym = local[yn]
+        xsym = local.get(xn, symbols(xn))
+        ysym = local.get(yn, symbols(yn))
     except Exception:
-        return None
+        return _text_figure(f"Equation: {eq_str}", "Could not parse equation for graphing")
+
+    x_range = np.linspace(-8, 8, 400)
 
     # Solve for y in terms of x
     try:
         expr = lhs - rhs
         y_sols = sym_solve(expr, ysym)
-        if not y_sols:
-            return None
-        y_expr = y_sols[0]
-        f_y = lambdify(xsym, y_expr, modules="numpy")
+        if y_sols:
+            y_expr = y_sols[0]
+            f_y = lambdify(xsym, y_expr, modules="numpy")
+            y_vals = np.array(f_y(x_range), dtype=float)
+            plot_as_y_of_x = True
+        else:
+            plot_as_y_of_x = False
     except Exception:
-        return None
+        plot_as_y_of_x = False
 
-    x_range = np.linspace(-8, 8, 400)
-    try:
-        y_vals = np.array(f_y(x_range), dtype=float)
-    except Exception:
-        return None
+    # Fallback: vertical line x = c (e.g. x = 3)
+    if not plot_as_y_of_x:
+        try:
+            expr = lhs - rhs
+            x_sols = sym_solve(expr, xsym)
+            if x_sols:
+                x_const = float(x_sols[0])
+                fig = Figure(figsize=(7, 3.4), dpi=100)
+                ax = fig.add_subplot(111)
+                _style_axes(ax, fig)
+                ax.axvline(x_const, color=C_LINE1, linewidth=2, label=eq_str.strip())
+                ax.set_title(f"Vertical line: {xn} = {x_const:g}", color=C_TEXT, fontsize=10)
+                ax.set_xlabel(xn, color=C_TEXT)
+                ax.set_ylabel(yn, color=C_TEXT)
+                ax.legend(fontsize=8, facecolor="#1e1e1e", edgecolor=C_SPINE, labelcolor=C_TEXT)
+                fig.tight_layout(pad=1.2)
+                return fig
+        except Exception:
+            pass
+        return _text_figure(f"Equation: {eq_str}", "Could not solve for either variable")
 
     fig = Figure(figsize=(7, 3.4), dpi=100)
     ax  = fig.add_subplot(111)
@@ -472,19 +525,165 @@ def _build_two_var(inputs, final):
 
 # ── System of two equations ─────────────────────────────────────────────────
 
+# ── Multi-variable projection (3+ vars) ─────────────────────────────────────
+
+def _build_multi_var_projection(inputs, final):
+    """For equations with 3+ variables, project onto the first two and plot."""
+    var_list = [v.strip() for v in inputs.get("variables", "").split(",")]
+    if len(var_list) < 2:
+        return _text_figure("3+ Variable Equation",
+                            "Too many variables to display in 2D.\nShowing first two variables.")
+    # Build a fake two-var inputs dict for the first two variables
+    eq_str = inputs.get("equation", "")
+    fake_inputs = {"equation": eq_str, "variables": f"{var_list[0]}, {var_list[1]}"}
+    result = _build_two_var(fake_inputs, final)
+    if result is None:
+        return _text_figure(
+            "3+ Variable Equation",
+            "Cannot display a 2D graph for equations with 3+ variables."
+        )
+    return result
+
+
+# ── System with only 1 variable ─────────────────────────────────────────────
+
+def _build_single_var_system(inputs, final, var_name):
+    """Graph a comma-separated system that only has one variable.
+
+    Plots LHS(x) and RHS(x) for each equation as separate coloured lines
+    so the user can see whether they overlap (dependent) or are parallel
+    (inconsistent).
+    """
+    from matplotlib.figure import Figure
+
+    eqs_str  = inputs.get("equations", "")
+    eq_parts = re.split(r"[,;]", eqs_str)
+    if len(eq_parts) < 1:
+        return _text_figure("System", "No equations found")
+
+    colors = [C_LINE1, C_LINE2, "#a855f7", "#f59e0b"]   # up to 4 equations
+
+    # Collect all lambdified (fn, label, color) triples
+    funcs = []
+    try:
+        x_sym = symbols(var_name)
+        for i, eq_s in enumerate(eq_parts[:4]):
+            lhs, rhs, local = _parse_eq(eq_s.strip())
+            f_lhs = lambdify(x_sym, lhs, modules="numpy")
+            f_rhs = lambdify(x_sym, rhs, modules="numpy")
+            c = colors[i % len(colors)]
+            funcs.append((f_lhs, f"LHS eq{i+1}: {eq_s.strip()}", c, "solid"))
+            funcs.append((f_rhs, f"RHS eq{i+1}: {eq_s.strip()}", c, "dotted"))
+    except Exception:
+        return None
+
+    if not funcs:
+        return _text_figure("System", "Could not evaluate equations for graphing")
+
+    # Determine anomaly by inspecting equation coefficients directly,
+    # since the final_answer string may just say "x = 0" for dependent 1-var systems.
+    anomaly = None
+    title = "Solution"
+    if "no solution" in final.lower():
+        anomaly = "no_solution"
+        title = "No Solution — Parallel lines (never intersect)"
+    elif "infinite" in final.lower():
+        anomaly = "infinite"
+        title = "Infinite Solutions — Equations are equivalent"
+    else:
+        # Inspect coefficients: if all equations reduce to the same ratio → dependent
+        try:
+            xsym2 = symbols(var_name)
+            exprs = []
+            for eq_s in eq_parts[:4]:
+                lh, rh, _ = _parse_eq(eq_s.strip())
+                exprs.append((lh - rh).expand())
+            if len(exprs) >= 2:
+                # Check if all are scalar multiples of exprs[0]
+                from sympy import simplify as sym_simplify, S as S_
+                ratios = []
+                for e in exprs[1:]:
+                    r = sym_simplify(e / exprs[0]) if exprs[0] != 0 else None
+                    ratios.append(r)
+                if all(r is not None and r.is_number for r in ratios):
+                    anomaly = "infinite"
+                    title = "Infinite Solutions — Equations are equivalent"
+        except Exception:
+            pass
+        if anomaly is None:
+            # Extract solution value for marker if possible
+            m = re.search(r"=\s*(-?[\d./]+)", final)
+            sol_val = None
+            if m:
+                try:
+                    sol_val = float(m.group(1))
+                except ValueError:
+                    pass
+            title = f"Solution: {var_name} = {sol_val:g}" if sol_val is not None else "Solution"
+
+    # Extract sol_val at top level for centering / dot marker
+    sol_val = None
+    m = re.search(r"=\s*(-?[\d./]+)", final)
+    if m:
+        try:
+            sol_val = float(m.group(1))
+        except ValueError:
+            pass
+
+    cx = sol_val if sol_val is not None else 0.0
+    x_range = np.linspace(cx - 5, cx + 5, 400)
+
+    fig = Figure(figsize=(7, 3.4), dpi=100)
+    ax  = fig.add_subplot(111)
+    _style_axes(ax, fig)
+
+    for fn, lbl, col, ls in funcs:
+        try:
+            raw = fn(x_range)
+            y = np.full_like(x_range, float(raw), dtype=float) if np.ndim(raw) == 0 \
+                else np.array(raw, dtype=float)
+            ax.plot(x_range, y, color=col, linewidth=2,
+                    linestyle=ls, label=lbl)
+        except Exception:
+            pass
+
+    # Mark the solution point on the first RHS line if unique solution
+    if anomaly is None and sol_val is not None and len(funcs) >= 2:
+        rhs_fn = funcs[1][0]   # second entry is RHS of eq1
+        try:
+            y_sol = float(rhs_fn(sol_val))
+            ax.scatter([sol_val], [y_sol], color=C_DOT, s=80, zorder=5,
+                       label=f"{var_name} = {sol_val:g}")
+            ax.axvline(sol_val, color=C_DOT, linewidth=1, linestyle=":", alpha=0.6)
+        except Exception:
+            pass
+
+    ax.set_title(title, color=C_TEXT, fontsize=10)
+    ax.set_xlabel(var_name, color=C_TEXT)
+    ax.set_ylabel("value", color=C_TEXT)
+    ax.legend(fontsize=7, facecolor="#1e1e1e", edgecolor=C_SPINE, labelcolor=C_TEXT)
+    fig.tight_layout(pad=1.2)
+    return fig
+
+
+# ── System with 2 variables ──────────────────────────────────────────────────
+
 def _build_system(inputs, final):
     from matplotlib.figure import Figure
 
     eqs_str  = inputs.get("equations", "")
     var_list = [v.strip() for v in inputs.get("variables", "x, y").split(",")]
+
+    # ── 1-variable system: plot LHS vs RHS for each equation ──────────
     if len(var_list) < 2:
-        return None
+        return _build_single_var_system(inputs, final, var_list[0] if var_list else "x")
+
     xn, yn = var_list[0], var_list[1]
 
     # Split on comma or semicolon
     eq_parts = re.split(r"[,;]", eqs_str)
     if len(eq_parts) < 2:
-        return None
+        return _text_figure("System", "Could not find two equations")
     eq1_str, eq2_str = eq_parts[0].strip(), eq_parts[1].strip()
 
     def _line_fn(eq_s):
@@ -503,7 +702,11 @@ def _build_system(inputs, final):
     f1, expr1 = _line_fn(eq1_str)
     f2, expr2 = _line_fn(eq2_str)
     if f1 is None or f2 is None:
-        return None
+        return _text_figure(
+            "System",
+            f"Could not solve for {yn} in one or both equations.\n"
+            f"Equations may be vertical lines or degenerate."
+        )
 
     # Parse solution coordinates
     sol_x = sol_y = None
