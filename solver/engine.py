@@ -58,6 +58,19 @@ def _detect_variables(equation_str: str) -> list:
     return sorted(candidates)
 
 
+def _expand_implicit_vars(s: str, var_names: set) -> str:
+    """Replace multi-letter tokens composed entirely of known variable letters
+    with explicit multiplication (e.g. ``as`` → ``a*s``) so that Python
+    reserved words like ``as``, ``in``, ``for`` never reach the parser."""
+    def _repl(m):
+        tok = m.group(0)
+        # Only expand if every letter belongs to a known variable
+        if all(ch in var_names for ch in tok):
+            return '*'.join(tok)
+        return tok
+    return re.sub(r'[A-Za-z]+', _repl, s)
+
+
 def _parse_side(expr_str: str, var_symbols):
     """Parse one side of the equation into a SymPy expression.
 
@@ -69,6 +82,9 @@ def _parse_side(expr_str: str, var_symbols):
         local = {var_symbols.name: var_symbols}
     else:
         local = {sym.name: sym for sym in var_symbols}
+    # Expand multi-letter var tokens before parsing so Python keywords
+    # (as, in, for, …) are never handed to parse_expr.
+    s = _expand_implicit_vars(s, set(local.keys()))
     try:
         return parse_expr(s, local_dict=local, transformations=TRANSFORMATIONS)
     except Exception as e:
@@ -729,6 +745,31 @@ def _solve_multi_var_single_eq(equation_str: str, var_names: list,
             "explanation": "Distribute multiplication across parentheses.",
         })
         lhs, rhs = lhs_exp, rhs_exp
+
+    # Combine like terms step: show if any variable appears >1 time in the
+    # original string on either side (SymPy combines silently on parse).
+    def _has_duplicate_vars(side_str, v_names):
+        for vn in v_names:
+            # count isolated occurrences of this variable letter
+            if len(re.findall(r'\b' + re.escape(vn) + r'\b', side_str)) >= 2:
+                return True
+            # also catch cases like o+o where regex word boundary might miss
+            if side_str.count(vn) >= 2:
+                return True
+        return False
+
+    if _has_duplicate_vars(lhs_str, var_names) or _has_duplicate_vars(rhs_str, var_names):
+        lhs_combined = expand(lhs)
+        rhs_combined = expand(rhs)
+        steps.append({
+            "description": "Combine like terms",
+            "expression": _format_equation(lhs_combined, rhs_combined),
+            "explanation": (
+                "Group and add terms with the same variable. "
+                "For example, o + o = 2o."
+            ),
+        })
+        lhs, rhs = lhs_combined, rhs_combined
 
     # Solve for each variable
     eq = Eq(lhs, rhs)

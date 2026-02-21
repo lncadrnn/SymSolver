@@ -285,12 +285,19 @@ class SymSolverApp(tk.Tk):
     def _friendly_error(equation: str, exc: Exception) -> str:
         """Return a user-friendly error message for common mistakes."""
         msg = str(exc)
-        # Already a clear ValueError from the solver — keep it.
+        # Already a clear ValueError from the solver — surface it cleanly.
         if isinstance(exc, ValueError):
+            # Strip internal parser noise for parse errors
+            if "Could not parse" in msg or "invalid syntax" in msg.lower():
+                return (
+                    f'Could not understand "{equation}".\n\n'
+                    "Make sure your equation uses standard math notation.\n"
+                    "Examples:  2x + 3 = 7  \u2022  as = 1  \u2022  x + y = 10, x - y = 2"
+                )
             return msg
         # Generic fallback for unexpected failures.
         return (
-            f"SymSolver could not process \"{equation}\".\n\n"
+            f'SymSolver could not process "{equation}".\n\n'
             "Supports linear equations with one or more variables,\n"
             "and systems separated by commas or semicolons.\n"
             "Examples:  2x + 3 = 7  \u2022  2x + 4y = 1  \u2022  x+y=10, x-y=2\n\n"
