@@ -38,16 +38,16 @@ class SymSolverApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("SymSolver — Linear Equation Solver")
-        self.geometry("780x700")
-        self.minsize(520, 480)
+        self.geometry("1000x850")
+        self.minsize(680, 600)
         self.configure(bg=BG)
 
         # ── Fonts ────────────────────────────────────────────────────────
-        self._default = tkfont.Font(family="Segoe UI", size=11)
-        self._bold    = tkfont.Font(family="Segoe UI", size=11, weight="bold")
-        self._title   = tkfont.Font(family="Segoe UI", size=16, weight="bold")
-        self._mono    = tkfont.Font(family="Consolas", size=12)
-        self._small   = tkfont.Font(family="Segoe UI", size=9)
+        self._default = tkfont.Font(family="Segoe UI", size=14)
+        self._bold    = tkfont.Font(family="Segoe UI", size=14, weight="bold")
+        self._title   = tkfont.Font(family="Segoe UI", size=22, weight="bold")
+        self._mono    = tkfont.Font(family="Consolas", size=15)
+        self._small   = tkfont.Font(family="Segoe UI", size=12)
 
         self._build_ui()
         self._show_welcome()
@@ -59,26 +59,26 @@ class SymSolverApp(tk.Tk):
 
     def _build_ui(self) -> None:
         # header
-        header = tk.Frame(self, bg=HEADER_BG, height=54)
+        header = tk.Frame(self, bg=HEADER_BG, height=72)
         header.pack(fill=tk.X)
         header.pack_propagate(False)
         tk.Label(
             header, text="⬡  SymSolver", font=self._title,
             bg=HEADER_BG, fg=ACCENT,
-        ).pack(side=tk.LEFT, padx=16)
+        ).pack(side=tk.LEFT, padx=20)
         tk.Label(
             header, text="Linear Equation Solver", font=self._small,
             bg=HEADER_BG, fg=TEXT_DIM,
-        ).pack(side=tk.LEFT, padx=(0, 16), pady=(4, 0))
+        ).pack(side=tk.LEFT, padx=(0, 20), pady=(6, 0))
 
         # new chat button
         self._new_btn = tk.Button(
             header, text="✦ New Chat", font=self._small,
             bg=ACCENT, fg=TEXT_BRIGHT, activebackground=ACCENT_HOVER,
-            activeforeground=TEXT_BRIGHT, bd=0, padx=12, pady=4,
+            activeforeground=TEXT_BRIGHT, bd=0, padx=16, pady=6,
             cursor="hand2", command=self._clear_chat,
         )
-        self._new_btn.pack(side=tk.RIGHT, padx=16)
+        self._new_btn.pack(side=tk.RIGHT, padx=20)
 
         # chat area (canvas + scrollbar for widget embedding)
         chat_wrapper = tk.Frame(self, bg=BG)
@@ -108,27 +108,27 @@ class SymSolverApp(tk.Tk):
         self._canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         # input bar
-        input_bar = tk.Frame(self, bg=BG_DARKER, pady=10)
+        input_bar = tk.Frame(self, bg=BG_DARKER, pady=14)
         input_bar.pack(fill=tk.X, side=tk.BOTTOM)
 
         inner = tk.Frame(input_bar, bg=INPUT_BG, highlightbackground=INPUT_BORDER,
                          highlightthickness=1)
-        inner.pack(fill=tk.X, padx=16)
+        inner.pack(fill=tk.X, padx=20)
 
         self._entry = tk.Entry(
             inner, font=self._mono, bg=INPUT_BG, fg=TEXT_BRIGHT,
             insertbackground=TEXT_BRIGHT, bd=0, relief=tk.FLAT,
         )
-        self._entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(12, 4), pady=8)
+        self._entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(14, 6), pady=10)
         self._entry.focus_set()
 
         self._send_btn = tk.Button(
             inner, text="Solve ➤", font=self._bold,
             bg=ACCENT, fg=TEXT_BRIGHT, activebackground=ACCENT_HOVER,
-            activeforeground=TEXT_BRIGHT, bd=0, padx=14, pady=4,
+            activeforeground=TEXT_BRIGHT, bd=0, padx=18, pady=6,
             cursor="hand2", command=self._on_send,
         )
-        self._send_btn.pack(side=tk.RIGHT, padx=(0, 6), pady=4)
+        self._send_btn.pack(side=tk.RIGHT, padx=(0, 8), pady=6)
 
     # ── Canvas helpers ──────────────────────────────────────────────────
 
@@ -146,10 +146,10 @@ class SymSolverApp(tk.Tk):
 
     def _show_welcome(self) -> None:
         self._welcome_frame = tk.Frame(self._chat_frame, bg=BG)
-        self._welcome_frame.pack(fill=tk.BOTH, expand=True, pady=40)
+        self._welcome_frame.pack(fill=tk.BOTH, expand=True, pady=50)
 
         tk.Label(
-            self._welcome_frame, text="⬡", font=tkfont.Font(size=42),
+            self._welcome_frame, text="⬡", font=tkfont.Font(size=56),
             bg=BG, fg=ACCENT,
         ).pack()
         tk.Label(
@@ -178,7 +178,7 @@ class SymSolverApp(tk.Tk):
             btn = tk.Button(
                 self._welcome_frame, text=eq, font=self._mono,
                 bg=STEP_BG, fg=ACCENT, activebackground=ACCENT,
-                activeforeground=TEXT_BRIGHT, bd=0, padx=16, pady=6,
+                activeforeground=TEXT_BRIGHT, bd=0, padx=20, pady=8,
                 cursor="hand2",
                 command=lambda e=eq: self._use_example(e),
             )
@@ -250,8 +250,8 @@ class SymSolverApp(tk.Tk):
     # ── Chat bubbles ────────────────────────────────────────────────────
 
     def _add_user_message(self, text: str) -> None:
-        frame = tk.Frame(self._chat_frame, bg=USER_BG, padx=14, pady=10)
-        frame.pack(fill=tk.X, padx=16, pady=(10, 2))
+        frame = tk.Frame(self._chat_frame, bg=USER_BG, padx=18, pady=14)
+        frame.pack(fill=tk.X, padx=20, pady=(12, 4))
         tk.Label(frame, text="You", font=self._bold, bg=USER_BG, fg=ACCENT,
                  anchor="w").pack(fill=tk.X)
         tk.Label(frame, text=text, font=self._mono, bg=USER_BG, fg=TEXT_BRIGHT,
@@ -263,19 +263,19 @@ class SymSolverApp(tk.Tk):
             self._chat_frame, text="  Solving…", font=self._default,
             bg=BG, fg=TEXT_DIM, anchor="w",
         )
-        label.pack(fill=tk.X, padx=16, pady=4)
+        label.pack(fill=tk.X, padx=20, pady=6)
         self._scroll_to_bottom()
         return label
 
     def _show_error(self, message: str, loading: tk.Label) -> None:
         loading.destroy()
-        frame = tk.Frame(self._chat_frame, bg=BOT_BG, padx=14, pady=10)
-        frame.pack(fill=tk.X, padx=16, pady=(2, 10))
+        frame = tk.Frame(self._chat_frame, bg=BOT_BG, padx=18, pady=14)
+        frame.pack(fill=tk.X, padx=20, pady=(4, 12))
         tk.Label(frame, text="⚠  Error", font=self._bold, bg=BOT_BG,
                  fg=ERROR, anchor="w").pack(fill=tk.X)
         tk.Label(frame, text=message, font=self._default, bg=BOT_BG,
-                 fg=TEXT, anchor="w", wraplength=650, justify=tk.LEFT
-                 ).pack(fill=tk.X, pady=(4, 0))
+                 fg=TEXT, anchor="w", wraplength=880, justify=tk.LEFT
+                 ).pack(fill=tk.X, pady=(6, 0))
         self._set_input_state(True)
         self._entry.focus_set()
         self._scroll_to_bottom()
@@ -283,8 +283,8 @@ class SymSolverApp(tk.Tk):
     def _show_result(self, result: dict, loading: tk.Label) -> None:
         loading.destroy()
 
-        bot = tk.Frame(self._chat_frame, bg=BOT_BG, padx=14, pady=10)
-        bot.pack(fill=tk.X, padx=16, pady=(2, 4))
+        bot = tk.Frame(self._chat_frame, bg=BOT_BG, padx=18, pady=14)
+        bot.pack(fill=tk.X, padx=20, pady=(4, 6))
         tk.Label(bot, text="SymSolver", font=self._bold, bg=BOT_BG,
                  fg=ACCENT, anchor="w").pack(fill=tk.X)
 
@@ -294,7 +294,7 @@ class SymSolverApp(tk.Tk):
         given_frame = self._make_card(bot, STEP_BG)
         tk.Label(given_frame, text=given.get("problem", result["equation"]),
                  font=self._default, bg=STEP_BG, fg=TEXT_BRIGHT, anchor="w",
-                 wraplength=650, justify=tk.LEFT).pack(fill=tk.X)
+                 wraplength=880, justify=tk.LEFT).pack(fill=tk.X)
         inputs = given.get("inputs", {})
         if inputs:
             for key, val in inputs.items():
@@ -312,7 +312,7 @@ class SymSolverApp(tk.Tk):
         if method.get("description"):
             tk.Label(method_frame, text=method["description"],
                      font=self._small, bg=STEP_BG, fg=TEXT_DIM, anchor="w",
-                     wraplength=650, justify=tk.LEFT).pack(fill=tk.X, pady=(2, 0))
+                     wraplength=880, justify=tk.LEFT).pack(fill=tk.X, pady=(2, 0))
         params = method.get("parameters", {})
         if params:
             for key, val in params.items():
@@ -330,7 +330,7 @@ class SymSolverApp(tk.Tk):
         self._render_section_header(bot, "FINAL ANSWER", "✓")
         ans_frame = tk.Frame(bot, bg=SUCCESS, padx=1, pady=1)
         ans_frame.pack(fill=tk.X, pady=(2, 4))
-        ans_inner = tk.Frame(ans_frame, bg="#0f1a0f", padx=12, pady=8)
+        ans_inner = tk.Frame(ans_frame, bg="#0f1a0f", padx=16, pady=12)
         ans_inner.pack(fill=tk.X)
         tk.Label(ans_inner, text=result["final_answer"], font=self._mono,
                  bg="#0f1a0f", fg=TEXT_BRIGHT, anchor="w"
@@ -358,7 +358,7 @@ class SymSolverApp(tk.Tk):
                 row.pack(fill=tk.X, pady=1)
                 tk.Label(row, text=f"  {label}:", font=self._small,
                          bg=STEP_BG, fg=TEXT_DIM, anchor="w",
-                         width=22).pack(side=tk.LEFT)
+                         width=26).pack(side=tk.LEFT)
                 tk.Label(row, text=value, font=self._small,
                          bg=STEP_BG, fg=TEXT_BRIGHT, anchor="w"
                          ).pack(side=tk.LEFT)
@@ -371,7 +371,7 @@ class SymSolverApp(tk.Tk):
 
     def _render_section_header(self, parent: tk.Frame, title: str, icon: str = "") -> None:
         header = tk.Frame(parent, bg=BOT_BG)
-        header.pack(fill=tk.X, pady=(10, 2))
+        header.pack(fill=tk.X, pady=(14, 4))
         label_text = f"{icon}  {title}" if icon else title
         tk.Label(header, text=label_text, font=self._bold,
                  bg=BOT_BG, fg=ACCENT, anchor="w").pack(fill=tk.X)
@@ -380,8 +380,8 @@ class SymSolverApp(tk.Tk):
 
     def _make_card(self, parent: tk.Frame, bg: str) -> tk.Frame:
         wrapper = tk.Frame(parent, bg=STEP_BORDER, padx=1, pady=1)
-        wrapper.pack(fill=tk.X, pady=3)
-        card = tk.Frame(wrapper, bg=bg, padx=10, pady=8)
+        wrapper.pack(fill=tk.X, pady=4)
+        card = tk.Frame(wrapper, bg=bg, padx=14, pady=10)
         card.pack(fill=tk.X)
         return card
 
@@ -389,9 +389,9 @@ class SymSolverApp(tk.Tk):
 
     def _render_step(self, parent: tk.Frame, step: dict) -> None:
         wrapper = tk.Frame(parent, bg=STEP_BORDER, padx=1, pady=1)
-        wrapper.pack(fill=tk.X, pady=3)
+        wrapper.pack(fill=tk.X, pady=4)
 
-        card = tk.Frame(wrapper, bg=STEP_BG, padx=10, pady=8)
+        card = tk.Frame(wrapper, bg=STEP_BG, padx=14, pady=10)
         card.pack(fill=tk.X)
 
         # description with step number
@@ -414,7 +414,7 @@ class SymSolverApp(tk.Tk):
             content = tk.Frame(card, bg=STEP_BG)
             lbl = tk.Label(content, text=expl_text, font=self._small,
                            bg=STEP_BG, fg=TEXT_DIM, anchor="w",
-                           wraplength=620, justify=tk.LEFT)
+                           wraplength=840, justify=tk.LEFT)
             lbl.pack(fill=tk.X, pady=(2, 0))
 
             visible = tk.BooleanVar(value=False)
@@ -444,7 +444,7 @@ class SymSolverApp(tk.Tk):
         container = tk.Frame(parent, bg=BOT_BG)
         container.pack(fill=tk.X, pady=(8, 0))
 
-        content = tk.Frame(container, bg=VERIFY_BG, padx=10, pady=8)
+        content = tk.Frame(container, bg=VERIFY_BG, padx=14, pady=10)
 
         visible = tk.BooleanVar(value=False)
 
