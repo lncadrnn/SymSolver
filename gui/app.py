@@ -548,13 +548,30 @@ class SymSolverApp(tk.Tk):
         def _after_problem():
             self._type_input_lines(given_frame, input_lines, 0)
 
-        self._type_label(given_frame, problem_text, self._default,
-                         STEP_BG, TEXT_BRIGHT, callback=_after_problem)
+        # Route through fraction-aware renderer if needed, else type animated
+        if self._FRAC_RE.search(problem_text):
+            w = self._render_math_expr(given_frame, problem_text,
+                                       font=self._default,
+                                       bg=STEP_BG, fg=TEXT_BRIGHT)
+            w.pack(anchor="w")
+            _after_problem()
+        else:
+            self._type_label(given_frame, problem_text, self._default,
+                             STEP_BG, TEXT_BRIGHT, callback=_after_problem)
 
     def _type_input_lines(self, parent, lines, idx):
         if idx < len(lines):
-            self._type_label(parent, lines[idx], self._small, STEP_BG, TEXT_DIM,
-                             callback=lambda: self._type_input_lines(parent, lines, idx + 1))
+            line = lines[idx]
+            def _next(): self._type_input_lines(parent, lines, idx + 1)
+            if self._FRAC_RE.search(line):
+                w = self._render_math_expr(parent, line,
+                                           font=self._small,
+                                           bg=STEP_BG, fg=TEXT_DIM)
+                w.pack(anchor="w")
+                _next()
+            else:
+                self._type_label(parent, line, self._small, STEP_BG, TEXT_DIM,
+                                 callback=_next)
         else:
             self._scroll_to_bottom()
             self._schedule_next()
@@ -603,9 +620,16 @@ class SymSolverApp(tk.Tk):
         expl_text = step.get("explanation", "")
 
         def _after_desc():
-            # Show expression (with fractions) — typed character by character
-            self._type_label(card, expr_text, self._mono, STEP_BG, ACCENT,
-                             callback=_after_expr)
+            # Show expression — use stacked fractions if markers present
+            if self._FRAC_RE.search(expr_text):
+                w = self._render_math_expr(card, expr_text,
+                                           font=self._mono,
+                                           bg=STEP_BG, fg=ACCENT)
+                w.pack(anchor="w", pady=(2, 0))
+                _after_expr()
+            else:
+                self._type_label(card, expr_text, self._mono, STEP_BG, ACCENT,
+                                 callback=_after_expr)
 
         def _after_expr():
             if expl_text:
@@ -734,8 +758,15 @@ class SymSolverApp(tk.Tk):
             expl_text = step.get("explanation", "")
 
             def _after_desc():
-                self._type_label(card, expr_text, self._mono, STEP_BG, ACCENT,
-                                 callback=_after_expr)
+                if self._FRAC_RE.search(expr_text):
+                    w = self._render_math_expr(card, expr_text,
+                                               font=self._mono,
+                                               bg=STEP_BG, fg=ACCENT)
+                    w.pack(anchor="w", pady=(2, 0))
+                    _after_expr()
+                else:
+                    self._type_label(card, expr_text, self._mono, STEP_BG, ACCENT,
+                                     callback=_after_expr)
 
             def _after_expr():
                 if expl_text:

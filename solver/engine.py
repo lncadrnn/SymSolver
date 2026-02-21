@@ -193,7 +193,7 @@ def _nonlinear_error_result(equation_str: str, lhs_str: str, rhs_str: str,
         "expression": _format_equation(lhs_exp, rhs_exp),
         "explanation": (
             f"After distributing and combining like terms we get: "
-            f"{_format_expr(lhs_exp)} = {_format_expr(rhs_exp)}."
+            f"{_format_expr_plain(lhs_exp)} = {_format_expr_plain(rhs_exp)}."
         ),
     })
 
@@ -386,11 +386,14 @@ def solve_linear_equation(equation_str: str) -> dict:
     original_lhs_str = equation_str.split('=')[0].strip()
     original_rhs_str = equation_str.split('=')[1].strip()
 
-    # Step 0: Original equation (show as user typed it)
+    # Step 0: Original equation — formatted so fractions and exponents display correctly
+    _fmt_orig_lhs = _format_expr(lhs)
+    _fmt_orig_rhs = _format_expr(rhs)
+    _fmt_orig_eq  = _format_equation(lhs, rhs)
     steps.append({
         "description": "Starting with the original equation",
-        "expression": f"{original_lhs_str} = {original_rhs_str}",
-        "explanation": f"We are given the equation {original_lhs_str} = {original_rhs_str}. Our goal is to isolate {var_name} on one side to find its value.",
+        "expression": _fmt_orig_eq,
+        "explanation": f"We are given the equation {_format_expr_plain(lhs)} = {_format_expr_plain(rhs)}. Our goal is to isolate {var_name} on one side to find its value.",
     })
 
     # --- Step: Combine like terms / Expand (if parsing auto-simplified) ---
@@ -433,13 +436,13 @@ def solve_linear_equation(equation_str: str) -> dict:
             action = "expands to" if '(' in original_lhs_str else "simplifies to"
             parts.append(
                 f"On the left side, {original_lhs_str} {action} "
-                f"{_format_expr(lhs)}"
+                f"{_format_expr_plain(lhs)}"
             )
         if _rhs_changed:
             action = "expands to" if '(' in original_rhs_str else "simplifies to"
             parts.append(
                 f"On the right side, {original_rhs_str} {action} "
-                f"{_format_expr(rhs)}"
+                f"{_format_expr_plain(rhs)}"
             )
         steps.append({
             "description": desc,
@@ -451,14 +454,14 @@ def solve_linear_equation(equation_str: str) -> dict:
     lhs_expanded = expand(lhs)
     rhs_expanded = expand(rhs)
     if lhs_expanded != lhs or rhs_expanded != rhs:
-        before_lhs, before_rhs = _format_expr(lhs), _format_expr(rhs)
+        before_lhs, before_rhs = _format_expr_plain(lhs), _format_expr_plain(rhs)
         steps.append({
             "description": "Expand both sides",
             "expression": _format_equation(lhs_expanded, rhs_expanded),
             "explanation": (
                 f"We distribute any multiplication across parentheses. "
-                f"{before_lhs} becomes {_format_expr(lhs_expanded)}, and "
-                f"{before_rhs} becomes {_format_expr(rhs_expanded)}. "
+                f"{before_lhs} becomes {_format_expr_plain(lhs_expanded)}, and "
+                f"{before_rhs} becomes {_format_expr_plain(rhs_expanded)}. "
                 f"This removes the parentheses so we can work with individual terms."
             ),
         })
@@ -476,22 +479,24 @@ def solve_linear_equation(equation_str: str) -> dict:
     # Move variable terms from right to left
     if rhs_x_coeff != 0:
         subtract_term = rhs_x_coeff * var
-        term_str = _format_expr(subtract_term)
+        term_str       = _format_expr(subtract_term)        # for expressions
+        term_str_plain = _format_expr_plain(subtract_term)  # for prose text
         if rhs_x_coeff > 0:
-            desc = f"Subtract {term_str} from both sides"
+            desc = f"Subtract {term_str_plain} from both sides"
             work_expr = f"{_format_expr(lhs)} - {term_str} = {_format_expr(rhs)} - {term_str}"
             explanation = (
-                f"The right side has the variable term {term_str}. "
-                f"To move all {var_name}-terms to the left, we subtract {term_str} from both sides. "
+                f"The right side has the variable term {term_str_plain}. "
+                f"To move all {var_name}-terms to the left, we subtract {term_str_plain} from both sides. "
                 f"Whatever we do to one side, we must do to the other to keep the equation balanced."
             )
         else:
-            pos_term = _format_expr(-subtract_term)
-            desc = f"Add {pos_term} to both sides"
+            pos_term       = _format_expr(-subtract_term)
+            pos_term_plain = _format_expr_plain(-subtract_term)
+            desc = f"Add {pos_term_plain} to both sides"
             work_expr = f"{_format_expr(lhs)} + {pos_term} = {_format_expr(rhs)} + {pos_term}"
             explanation = (
-                f"The right side has {term_str}. "
-                f"To move all {var_name}-terms to the left, we add {pos_term} to both sides. "
+                f"The right side has {term_str_plain}. "
+                f"To move all {var_name}-terms to the left, we add {pos_term_plain} to both sides. "
                 f"This cancels the {var_name}-term on the right."
             )
         steps.append({
@@ -504,7 +509,7 @@ def solve_linear_equation(equation_str: str) -> dict:
         steps.append({
             "description": "Simplify both sides",
             "expression": _format_equation(new_lhs, new_rhs),
-            "explanation": f"Combining like terms: the left side becomes {_format_expr(new_lhs)} and the right side becomes {_format_expr(new_rhs)}.",
+            "explanation": f"Combining like terms: the left side becomes {_format_expr_plain(new_lhs)} and the right side becomes {_format_expr_plain(new_rhs)}.",
         })
         lhs, rhs = new_lhs, new_rhs
 
@@ -512,22 +517,24 @@ def solve_linear_equation(equation_str: str) -> dict:
     lhs_x_coeff_now = lhs.coeff(var)
     lhs_const_now = expand(lhs - lhs_x_coeff_now * var)
     if lhs_const_now != 0:
-        const_str = _format_expr(lhs_const_now)
+        const_str       = _format_expr(lhs_const_now)        # for expressions
+        const_str_plain = _format_expr_plain(lhs_const_now)  # for prose text
         if lhs_const_now > 0:
-            desc = f"Subtract {const_str} from both sides"
+            desc = f"Subtract {const_str_plain} from both sides"
             work_expr = f"{_format_expr(lhs)} - {const_str} = {_format_expr(rhs)} - {const_str}"
             explanation = (
-                f"The left side still has the constant {const_str}. "
-                f"To isolate the {var_name}-term, we subtract {const_str} from both sides. "
+                f"The left side still has the constant {const_str_plain}. "
+                f"To isolate the {var_name}-term, we subtract {const_str_plain} from both sides. "
                 f"This moves the constant to the right side."
             )
         else:
-            pos_const = _format_expr(-lhs_const_now)
-            desc = f"Add {pos_const} to both sides"
+            pos_const       = _format_expr(-lhs_const_now)
+            pos_const_plain = _format_expr_plain(-lhs_const_now)
+            desc = f"Add {pos_const_plain} to both sides"
             work_expr = f"{_format_expr(lhs)} + {pos_const} = {_format_expr(rhs)} + {pos_const}"
             explanation = (
-                f"The left side has {const_str}. "
-                f"To isolate the {var_name}-term, we add {pos_const} to both sides. "
+                f"The left side has {const_str_plain}. "
+                f"To isolate the {var_name}-term, we add {pos_const_plain} to both sides. "
                 f"This cancels the constant on the left."
             )
         steps.append({
@@ -540,7 +547,7 @@ def solve_linear_equation(equation_str: str) -> dict:
         steps.append({
             "description": "Simplify both sides",
             "expression": _format_equation(new_lhs, new_rhs),
-            "explanation": f"Combining like terms: the left side becomes {_format_expr(new_lhs)} and the right side becomes {_format_expr(new_rhs)}.",
+            "explanation": f"Combining like terms: the left side becomes {_format_expr_plain(new_lhs)} and the right side becomes {_format_expr_plain(new_rhs)}.",
         })
         lhs, rhs = new_lhs, new_rhs
 
@@ -603,12 +610,12 @@ def solve_linear_equation(equation_str: str) -> dict:
         runtime_ms = round((t_end - t_start) * 1000, 2)
 
         given = {
-            "problem": f"Solve the linear equation: {equation_str}",
+            "problem": f"Solve the linear equation: {_fmt_orig_eq}",
             "inputs": {
-                "equation": equation_str,
-                "left_side": original_lhs_str,
-                "right_side": original_rhs_str,
-                "variable": var_name,
+                "equation":   _fmt_orig_eq,
+                "left_side":  _fmt_orig_lhs,
+                "right_side": _fmt_orig_rhs,
+                "variable":   var_name,
             },
         }
         method = {
@@ -639,24 +646,31 @@ def solve_linear_equation(equation_str: str) -> dict:
         }
 
     if coeff != 1:
-        coeff_str = _format_expr(coeff)
+        coeff_str_expr  = _format_expr(coeff)        # for expressions (may contain fraction markers)
+        coeff_str_plain = _format_expr_plain(coeff)  # for prose text (always readable)
         lhs_str_fmt = _format_expr(lhs)
         rhs_str_fmt = _format_expr(rhs)
+        # Use ÷ notation when the coefficient itself is a fraction to avoid
+        # nesting fraction markers (⟦⟦x|3⟧|⟦1|3⟧⟧) which the renderer can't handle.
+        if _FRAC_OPEN in coeff_str_expr:
+            divide_expr = f"{lhs_str_fmt} ÷ {coeff_str_expr} = {rhs_str_fmt} ÷ {coeff_str_expr}"
+        else:
+            divide_expr = f"{_frac(lhs_str_fmt, coeff_str_expr)} = {_frac(rhs_str_fmt, coeff_str_expr)}"
         steps.append({
-            "description": f"Divide both sides by {coeff_str}",
-            "expression": f"{_frac(lhs_str_fmt, coeff_str)} = {_frac(rhs_str_fmt, coeff_str)}",
+            "description": f"Divide both sides by {coeff_str_plain}",
+            "expression": divide_expr,
             "explanation": (
-                f"The coefficient of {var_name} is {coeff_str}. "
-                f"To get {var_name} alone, we divide both sides by {coeff_str}. "
-                f"Dividing {lhs_str_fmt} by {coeff_str} gives {var_name}, and "
-                f"dividing {rhs_str_fmt} by {coeff_str} gives us the value."
+                f"The coefficient of {var_name} is {coeff_str_plain}. "
+                f"To get {var_name} alone, we divide both sides by {coeff_str_plain}. "
+                f"Dividing {_format_expr_plain(lhs)} by {coeff_str_plain} gives {var_name}, and "
+                f"dividing {_format_expr_plain(rhs)} by {coeff_str_plain} gives us the value."
             ),
         })
         solution = simplify(rhs / coeff)
         steps.append({
             "description": "Simplify to get the answer",
             "expression": f"{var_name} = {_format_expr(solution)}",
-            "explanation": f"Performing the division: {_format_expr(rhs)} ÷ {coeff_str} = {_format_expr(solution)}. So {var_name} equals {_format_expr(solution)}.",
+            "explanation": f"Performing the division: {_format_expr_plain(rhs)} ÷ {coeff_str_plain} = {_format_expr_plain(solution)}. So {var_name} equals {_format_expr_plain(solution)}.",
         })
     else:
         solution = simplify(rhs)
@@ -664,7 +678,9 @@ def solve_linear_equation(equation_str: str) -> dict:
     # Build verification steps
     lhs_check = _parse_side(equation_str.split('=')[0], var)
     rhs_check = _parse_side(equation_str.split('=')[1], var)
-    sol_str = _format_expr(solution)
+    sol_str_expr  = _format_expr(solution)        # for expressions
+    sol_str_plain = _format_expr_plain(solution)  # for prose text
+    sol_str = sol_str_expr  # kept for final_answer expression
     original_eq = f"{_format_expr(lhs_check)} = {_format_expr(rhs_check)}"
 
     verification_steps = []
@@ -673,16 +689,16 @@ def solve_linear_equation(equation_str: str) -> dict:
     verification_steps.append({
         "description": "Start with the original equation",
         "expression": original_eq,
-        "explanation": f"We will substitute {var_name} = {sol_str} back into the original equation to verify our answer is correct.",
+        "explanation": f"We will substitute {var_name} = {sol_str_plain} back into the original equation to verify our answer is correct.",
     })
 
     # Step 2: Show substitution
-    lhs_substituted_str = _format_expr(lhs_check).replace(var_name, f'({sol_str})')
-    rhs_substituted_str = _format_expr(rhs_check).replace(var_name, f'({sol_str})')
+    lhs_substituted_str = _format_expr(lhs_check).replace(var_name, f'({sol_str_plain})')
+    rhs_substituted_str = _format_expr(rhs_check).replace(var_name, f'({sol_str_plain})')
     verification_steps.append({
-        "description": f"Substitute {var_name} = {sol_str} into both sides",
+        "description": f"Substitute {var_name} = {sol_str_plain} into both sides",
         "expression": f"{lhs_substituted_str} = {rhs_substituted_str}",
-        "explanation": f"We replace every {var_name} with {sol_str} in both the left-hand side and right-hand side of the equation.",
+        "explanation": f"We replace every {var_name} with {sol_str_plain} in both the left-hand side and right-hand side of the equation.",
     })
 
     # Step 3: Evaluate LHS
@@ -690,7 +706,7 @@ def solve_linear_equation(equation_str: str) -> dict:
     verification_steps.append({
         "description": "Evaluate the left-hand side",
         "expression": f"LHS = {lhs_substituted_str} = {_format_expr(lhs_val)}",
-        "explanation": f"Computing the left side: we substitute and simplify to get {_format_expr(lhs_val)}.",
+        "explanation": f"Computing the left side: we substitute and simplify to get {_format_expr_plain(lhs_val)}.",
     })
 
     # Step 4: Evaluate RHS
@@ -698,14 +714,14 @@ def solve_linear_equation(equation_str: str) -> dict:
     verification_steps.append({
         "description": "Evaluate the right-hand side",
         "expression": f"RHS = {rhs_substituted_str} = {_format_expr(rhs_val)}",
-        "explanation": f"Computing the right side: we substitute and simplify to get {_format_expr(rhs_val)}.",
+        "explanation": f"Computing the right side: we substitute and simplify to get {_format_expr_plain(rhs_val)}.",
     })
 
     # Step 5: Compare
     verification_steps.append({
         "description": "Compare both sides",
         "expression": f"LHS = {_format_expr(lhs_val)}, RHS = {_format_expr(rhs_val)}\nLHS = RHS  ✓",
-        "explanation": f"Both sides equal {_format_expr(lhs_val)}, confirming that {var_name} = {sol_str} is the correct solution!",
+        "explanation": f"Both sides equal {_format_expr_plain(lhs_val)}, confirming that {var_name} = {sol_str_plain} is the correct solution!",
     })
 
     final_answer = f"{var_name} = {_format_expr(solution)}"
@@ -721,12 +737,12 @@ def solve_linear_equation(equation_str: str) -> dict:
     runtime_ms = round((t_end - t_start) * 1000, 2)
 
     given = {
-        "problem": f"Solve the linear equation: {equation_str}",
+        "problem": f"Solve the linear equation: {_fmt_orig_eq}",
         "inputs": {
-            "equation": equation_str,
-            "left_side": original_lhs_str,
-            "right_side": original_rhs_str,
-            "variable": var_name,
+            "equation":   _fmt_orig_eq,
+            "left_side":  _fmt_orig_lhs,
+            "right_side": _fmt_orig_rhs,
+            "variable":   var_name,
         },
     }
 
@@ -782,6 +798,11 @@ def _solve_multi_var_single_eq(equation_str: str, var_names: list,
     lhs = _parse_side(lhs_str, var_symbols)
     rhs = _parse_side(rhs_str, var_symbols)
 
+    # Cache formatted originals before any modification
+    _fmt_mv_lhs = _format_expr(lhs)
+    _fmt_mv_rhs = _format_expr(rhs)
+    _fmt_mv_eq  = _format_equation(lhs, rhs)
+
     # Verify linearity
     combined = expand(lhs - rhs)
     max_degree = 0
@@ -807,7 +828,7 @@ def _solve_multi_var_single_eq(equation_str: str, var_names: list,
     # Step: original equation
     steps.append({
         "description": "Starting with the original equation",
-        "expression": f"{lhs_str} = {rhs_str}",
+        "expression": _fmt_mv_eq,
         "explanation": (
             f"We are given a linear equation with variables "
             f"{', '.join(var_names)}. We will express each variable "
@@ -911,12 +932,12 @@ def _solve_multi_var_single_eq(equation_str: str, var_names: list,
     return {
         "equation": equation_str,
         "given": {
-            "problem": f"Solve the linear equation: {equation_str}",
+            "problem": f"Solve the linear equation: {_fmt_mv_eq}",
             "inputs": {
-                "equation": equation_str,
-                "left_side": lhs_str,
-                "right_side": rhs_str,
-                "variables": ", ".join(var_names),
+                "equation":   _fmt_mv_eq,
+                "left_side":  _fmt_mv_lhs,
+                "right_side": _fmt_mv_rhs,
+                "variables":  ", ".join(var_names),
             },
         },
         "method": {
