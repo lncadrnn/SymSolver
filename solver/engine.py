@@ -214,6 +214,29 @@ def _count_terms_in_str(expr_str: str) -> int:
     return count
 
 
+def _validate_characters(equation_str: str) -> None:
+    """Reject equations that contain characters outside the allowed set.
+
+    Allowed: letters, digits, whitespace, and the math symbols
+    + - * / ^ = ( ) . , ;
+    """
+    allowed = set("abcdefghijklmnopqrstuvwxyz"
+                  "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                  "0123456789"
+                  " \t+-*/^=().,:;")
+    bad = set()
+    for ch in equation_str:
+        if ch not in allowed:
+            bad.add(ch)
+    if bad:
+        bad_sorted = " ".join(sorted(bad))
+        raise ValueError(
+            f"Invalid character(s): {bad_sorted}\n"
+            f"Only letters, numbers, and math symbols "
+            f"(+ - * / ^ = ( ) . , ;) are allowed."
+        )
+
+
 def solve_linear_equation(equation_str: str) -> dict:
     """
     Solve one or more linear equations step by step.
@@ -227,6 +250,9 @@ def solve_linear_equation(equation_str: str) -> dict:
       - given, method, steps, final_answer, verification_steps, summary
     """
     t_start = time.perf_counter()
+
+    # ── Validate input characters ───────────────────────────────────────
+    _validate_characters(equation_str)
 
     # ── Split by , or ; to detect a system ──────────────────────────────
     raw_equations = [eq.strip() for eq in re.split(r'\s*[;,]\s*', equation_str)
