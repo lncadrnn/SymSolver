@@ -141,6 +141,7 @@ class SymSolverApp(tk.Tk):
         self._entry = tk.Entry(
             inner, font=self._mono, bg=INPUT_BG, fg=TEXT_BRIGHT,
             insertbackground=TEXT_BRIGHT, bd=0, relief=tk.FLAT,
+            disabledbackground=INPUT_BG, disabledforeground="#666666",
         )
         self._entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(14, 6), pady=10)
         self._entry.focus_set()
@@ -152,6 +153,16 @@ class SymSolverApp(tk.Tk):
             cursor="hand2", command=self._on_send,
         )
         self._send_btn.pack(side=tk.RIGHT, padx=(0, 8), pady=6)
+
+        # Stop button — shown only during solving/animation
+        self._stop_btn = tk.Button(
+            inner, text="⏹", font=self._bold,
+            bg="#3a1a1a", fg="#ff6b6b", activebackground="#4a2020",
+            activeforeground="#ff9999", bd=0, padx=14, pady=6,
+            cursor="hand2", relief=tk.FLAT,
+            command=self._stop_solving,
+        )
+        # not packed yet — shown on demand
 
     # ── Canvas helpers ──────────────────────────────────────────────────
 
@@ -286,10 +297,24 @@ class SymSolverApp(tk.Tk):
             f"Details: {msg}"
         )
 
+    def _stop_solving(self) -> None:
+        """Abort any running animation and re-enable input."""
+        self._anim_queue = []
+        self._anim_idx = 0
+        self._set_input_state(True)
+        self._entry.focus_set()
+
     def _set_input_state(self, enabled: bool) -> None:
         state = tk.NORMAL if enabled else tk.DISABLED
         self._entry.configure(state=state)
-        self._send_btn.configure(state=state)
+        if enabled:
+            # hide stop, show solve
+            self._stop_btn.pack_forget()
+            self._send_btn.pack(side=tk.RIGHT, padx=(0, 8), pady=6)
+        else:
+            # hide solve, show stop
+            self._send_btn.pack_forget()
+            self._stop_btn.pack(side=tk.RIGHT, padx=(0, 8), pady=6)
 
     # ── Chat bubbles ────────────────────────────────────────────────────
 
