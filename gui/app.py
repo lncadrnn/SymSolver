@@ -199,6 +199,7 @@ class SymSolverApp(tk.Tk):
         for w in self._chat_frame.winfo_children():
             w.destroy()
         self._show_welcome()
+        self._canvas.yview_moveto(0.0)
 
     # ── Send equation ───────────────────────────────────────────────────
 
@@ -481,7 +482,8 @@ class SymSolverApp(tk.Tk):
                            wraplength=840, justify=tk.LEFT)
             lbl.pack(fill=tk.X, pady=(2, 0))
 
-            visible = tk.BooleanVar(value=False)
+            visible = tk.BooleanVar(value=True)
+            content.pack(fill=tk.X, pady=(2, 0))
 
             def _toggle(v=visible, c=content, b=None):
                 if v.get():
@@ -494,13 +496,17 @@ class SymSolverApp(tk.Tk):
                     b.configure(text="▾ Hide Explanation")
 
             btn = tk.Button(
-                toggle_frame, text="▸ Show Explanation", font=self._small,
-                bg=STEP_BG, fg=TEXT_DIM, activebackground=STEP_BG,
-                activeforeground=TEXT, bd=0, cursor="hand2",
-                anchor="w",
+                toggle_frame, text="▾ Hide Explanation", font=self._small,
+                bg="#252525", fg=ACCENT, activebackground="#303030",
+                activeforeground="#3d8ecf", bd=0, cursor="hand2",
+                anchor="w", padx=10, pady=4,
+                relief=tk.FLAT, highlightthickness=1,
+                highlightbackground="#333333", highlightcolor=ACCENT,
             )
             btn.configure(command=lambda b=btn: _toggle(b=b))
-            btn.pack(anchor="w")
+            btn.bind("<Enter>", lambda e, b=btn: b.configure(bg="#303030", fg="#3d8ecf"))
+            btn.bind("<Leave>", lambda e, b=btn: b.configure(bg="#252525", fg=ACCENT))
+            btn.pack(anchor="w", pady=(2, 0))
 
     # ── Verification renderer ───────────────────────────────────────────
 
