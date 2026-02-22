@@ -697,10 +697,17 @@ class SymSolverApp(tk.Tk):
             queue.append(_render_step)
 
         # ── FINAL ANSWER ───────────────────────────────────────────────
+        _is_educational = result.get("nonlinear_education", False)
+
         def _render_answer():
-            status = self._show_status(bot, "Finalizing answer...")
+            _status_text = (
+                "Identifying equation type..."
+                if _is_educational else "Finalizing answer..."
+            )
+            status = self._show_status(bot, _status_text)
             self.after(self._PHASE_PAUSE, lambda: self._animate_answer(
-                bot, result["final_answer"], status))
+                bot, result["final_answer"], status,
+                educational=_is_educational))
 
         queue.append(_render_answer)
 
@@ -907,21 +914,39 @@ class SymSolverApp(tk.Tk):
         self._type_label(content, expl_text, self._small, STEP_BG, TEXT_DIM,
                          wraplength=840, callback=_after_typed)
 
-    def _animate_answer(self, parent, final_answer, status_lbl):
+    def _animate_answer(self, parent, final_answer, status_lbl,
+                        educational: bool = False):
         status_lbl.destroy()
-        self._render_section_header(parent, "FINAL ANSWER", "✓")
-        ans_frame = tk.Frame(parent, bg=SUCCESS, padx=1, pady=1)
-        ans_frame.pack(fill=tk.X, pady=(2, 4))
-        ans_inner = tk.Frame(ans_frame, bg=VERIFY_BG, padx=16, pady=12)
-        ans_inner.pack(fill=tk.X)
+        if educational:
+            # Amber-toned header and box for educational / not-linear results
+            _border = "#c87800" if self._theme == "dark" else "#c86400"
+            _inner_bg = "#1a1000" if self._theme == "dark" else "#fff8e1"
+            _text_fg = "#ffc048" if self._theme == "dark" else "#7a3c00"
+            self._render_section_header_colored(
+                parent, "LINEARITY NOTE", "⚠", fg=_border)
+            ans_frame = tk.Frame(parent, bg=_border, padx=1, pady=1)
+            ans_frame.pack(fill=tk.X, pady=(2, 4))
+            ans_inner = tk.Frame(ans_frame, bg=_inner_bg, padx=16, pady=12)
+            ans_inner.pack(fill=tk.X)
+            lines = final_answer.split("\n")
+            self._type_answer_lines(ans_inner, lines, 0, bg=_inner_bg, fg=_text_fg)
+        else:
+            self._render_section_header(parent, "FINAL ANSWER", "✓")
+            ans_frame = tk.Frame(parent, bg=SUCCESS, padx=1, pady=1)
+            ans_frame.pack(fill=tk.X, pady=(2, 4))
+            ans_inner = tk.Frame(ans_frame, bg=VERIFY_BG, padx=16, pady=12)
+            ans_inner.pack(fill=tk.X)
+            lines = final_answer.split("\n")
+            self._type_answer_lines(ans_inner, lines, 0)
 
-        lines = final_answer.split("\n")
-        self._type_answer_lines(ans_inner, lines, 0)
-
-    def _type_answer_lines(self, parent, lines, idx):
+    def _type_answer_lines(self, parent, lines, idx,
+                           bg=None, fg=None):
+        _bg = bg if bg is not None else VERIFY_BG
+        _fg = fg if fg is not None else TEXT_BRIGHT
         if idx < len(lines):
-            self._type_label(parent, lines[idx], self._mono, VERIFY_BG, TEXT_BRIGHT,
-                             callback=lambda: self._type_answer_lines(parent, lines, idx + 1))
+            self._type_label(parent, lines[idx], self._small, _bg, _fg,
+                             callback=lambda: self._type_answer_lines(
+                                 parent, lines, idx + 1, bg=bg, fg=fg))
         else:
             self._scroll_to_bottom()
             self._schedule_next()
@@ -1036,7 +1061,7 @@ class SymSolverApp(tk.Tk):
             self._scroll_to_bottom()
             self._schedule_next()
 
-    # ── Section header helper ───────────────────────────────────────────
+    # ── Section header helpers ──────────────────────────────────────────
 
     def _render_section_header(self, parent: tk.Frame, title: str, icon: str = "") -> None:
         header = tk.Frame(parent, bg=BOT_BG)
@@ -1046,6 +1071,17 @@ class SymSolverApp(tk.Tk):
                  bg=BOT_BG, fg=ACCENT, anchor="w").pack(fill=tk.X)
         # thin accent line
         tk.Frame(header, bg=ACCENT, height=1).pack(fill=tk.X, pady=(2, 0))
+
+    def _render_section_header_colored(self, parent: tk.Frame, title: str,
+                                       icon: str = "", fg: str = "") -> None:
+        """Like _render_section_header but with a custom foreground/accent colour."""
+        _fg = fg or ACCENT
+        header = tk.Frame(parent, bg=BOT_BG)
+        header.pack(fill=tk.X, pady=(14, 4))
+        label_text = f"{icon}  {title}" if icon else title
+        tk.Label(header, text=label_text, font=self._bold,
+                 bg=BOT_BG, fg=_fg, anchor="w").pack(fill=tk.X)
+        tk.Frame(header, bg=_fg, height=1).pack(fill=tk.X, pady=(2, 0))
 
     def _make_card(self, parent: tk.Frame, bg: str) -> tk.Frame:
         wrapper = tk.Frame(parent, bg=STEP_BORDER, padx=1, pady=1)

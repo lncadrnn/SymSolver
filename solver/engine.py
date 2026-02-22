@@ -14,7 +14,7 @@ from datetime import datetime
 import sympy
 from sympy import (
     symbols, sympify, Eq, solve, simplify, expand,
-    Add, Mul, Rational, S, Symbol
+    Add, Mul, Rational, S, Symbol, fraction
 )
 from sympy.parsing.sympy_parser import (
     parse_expr, standard_transformations, implicit_multiplication_application,
@@ -168,11 +168,165 @@ def _format_equation(lhs, rhs) -> str:
     return f"{_format_expr(lhs)} = {_format_expr(rhs)}"
 
 
+# ── Non-linearity detection helpers ─────────────────────────────────────
+
+_DEGREE_NAMES = {
+    0: "constant",
+    1: "linear",
+    2: "quadratic",
+    3: "cubic",
+    4: "quartic",
+    5: "quintic",
+}
+
+
+def _degree_name(degree: int) -> str:
+    """Return the conventional name for a polynomial of the given degree."""
+    return _DEGREE_NAMES.get(degree, f"degree-{degree} polynomial")
+
+
+_TRANS_FUNC_NAMES = (
+    'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
+    'asin', 'acos', 'atan', 'acot',
+    'sinh', 'cosh', 'tanh',
+    'log', 'exp',
+)
+
+
+def _has_transcendental(expr, var_symbols) -> bool:
+    """Return True if any transcendental/trig/log/exp function is applied to a variable."""
+    import sympy as _sy
+    vs_set = {var_symbols} if isinstance(var_symbols, Symbol) else set(var_symbols)
+    for name in _TRANS_FUNC_NAMES:
+        cls = getattr(_sy, name, None)
+        if cls is None:
+            continue
+        for atom in expr.atoms(cls):
+            if atom.free_symbols & vs_set:
+                return True
+    return False
+
+
+def _has_var_in_denominator(expr, var_symbols) -> bool:
+    """Return True if any variable appears in the denominator of expr."""
+    vs_set = {var_symbols} if isinstance(var_symbols, Symbol) else set(var_symbols)
+    # Check the whole expression's denominator
+    try:
+        _, den = fraction(expr)
+        if den.free_symbols & vs_set:
+            return True
+    except Exception:
+        pass
+    # Also check individual terms
+    for term in expr.as_ordered_terms():
+        try:
+            _, den = fraction(term)
+            if den.free_symbols & vs_set:
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def _detect_nonlinear_reason(combined_expanded, var_symbols_list: list,
+                              highest_deg: int) -> str:
+    """Return 'transcendental', 'denominator', 'product', or 'degree'."""
+    if _has_transcendental(combined_expanded, var_symbols_list):
+        return "transcendental"
+    if _has_var_in_denominator(combined_expanded, var_symbols_list):
+        return "denominator"
+    # Distinguish product-of-variables (total deg ≥ 2, each var alone deg ≤ 1)
+    if len(var_symbols_list) > 1 and highest_deg >= 2:
+        max_single = 0
+        for vs in var_symbols_list:
+            p = combined_expanded.as_poly(vs)
+            if p is not None and p.degree() > max_single:
+                max_single = p.degree()
+        if max_single <= 1:
+            return "product"
+    return "degree"
+
+
+def _build_educational_message(reason: str, highest_deg: int,
+                               var_names: list) -> str:
+    """Return a multi-line educational message explaining non-linearity."""
+    deg_sym = _to_superscript(str(highest_deg)) if highest_deg >= 2 else ""
+
+    if reason == "transcendental":
+        return (
+            "This equation contains a transcendental function.\n"
+            "\n"
+            "When a variable is placed inside a trigonometric, logarithmic,\n"
+            "or exponential function — such as sin(x), cos(x), log(x), or eˣ —\n"
+            "the relationship between the variable and its output becomes non-linear.\n"
+            "\n"
+            "Linear equations require the variable to appear on its own (e.g. 2x + 3),\n"
+            "not inside any function. Transcendental equations require specialized\n"
+            "methods (e.g. inverse trig, numerical solvers) to solve."
+        )
+
+    if reason == "denominator":
+        return (
+            "This equation has a variable in the denominator (e.g. 1/x).\n"
+            "\n"
+            "A variable in the denominator is equivalent to a negative exponent:\n"
+            "  1/x  =  x⁻¹\n"
+            "\n"
+            "Linear equations cannot have negative exponents.\n"
+            "The variable must appear exactly as x¹ (plain x) —\n"
+            "no negative, fractional, or higher exponents are allowed."
+        )
+
+    if reason == "product":
+        var_example = " · ".join(var_names[:2]) if len(var_names) >= 2 else "x · y"
+        return (
+            f"This equation contains a product of variables ({var_example}).\n"
+            "\n"
+            "When variables are multiplied together the total degree becomes 2 or more,\n"
+            "making the equation non-linear (it describes a curve, not a straight line).\n"
+            "\n"
+            "Linear equations only allow each variable to appear individually —\n"
+            "no products, no squared terms, no cross-terms between variables."
+        )
+
+    # reason == "degree" (default)
+    eq_type = _degree_name(highest_deg)
+    deg_ref = {
+        2: "ax\u00b2 + bx + c = 0",
+        3: "ax\u00b3 + bx\u00b2 + cx + d = 0",
+        4: "ax\u2074 + bx\u00b3 + cx\u00b2 + dx + e = 0",
+        5: "ax\u2075 + bx\u2074 + cx\u00b3 + dx\u00b2 + ex + f = 0",
+    }.get(highest_deg, f"degree-{highest_deg} polynomial = 0")
+    return (
+        f"This is a {eq_type} equation (highest degree: {highest_deg}).\n"
+        f"  Standard form: {deg_ref}\n"
+        "\n"
+        "Equations are classified by their highest degree:\n"
+        "  Degree 0  →  constant   (e.g.  5 = 5)\n"
+        "  Degree 1  →  linear     (e.g.  2x + 3 = 7)  ← must be this\n"
+        "  Degree 2  →  quadratic  (e.g.  x² + 5x + 6 = 0)\n"
+        "  Degree 3  →  cubic      (e.g.  x³ − 2x² + x = 0)\n"
+        "  Degree 4  →  quartic    (e.g.  x⁴ − 1 = 0)\n"
+        "  Degree 5  →  quintic    (e.g.  x⁵ + x = 0)\n"
+        "\n"
+        f"Since this equation has degree {highest_deg}, it is non-linear\n"
+        "and cannot be solved with linear algebra methods."
+    )
+
+
 def _nonlinear_error_result(equation_str: str, lhs_str: str, rhs_str: str,
                             lhs, rhs, var_names, degree: int,
-                            t_start: float) -> dict:
-    """Return a result dict that shows the combine-like-terms step and then
-    explains why the equation cannot be solved (nonlinear)."""
+                            t_start: float,
+                            reason: str = "degree") -> dict:
+    """Return a result dict showing the algebra trail and an educational
+    explanation of why the equation is not linear.
+
+    *reason* is one of:
+      'degree'        – polynomial with highest degree > 1
+      'denominator'   – variable appears in the denominator (negative exponent)
+      'product'       – product of two or more variables
+      'transcendental'– variable inside trig / log / exp function
+    """
     steps = []
 
     # Cache formatted originals
@@ -186,7 +340,7 @@ def _nonlinear_error_result(equation_str: str, lhs_str: str, rhs_str: str,
         "expression": _fmt_nl_eq,
         "explanation": (
             f"We are given the equation {_format_expr_plain(lhs)} = {_format_expr_plain(rhs)}. "
-            f"Let's simplify it first to determine if it is linear."
+            f"Let's simplify it first to check if it is linear."
         ),
     })
 
@@ -202,21 +356,19 @@ def _nonlinear_error_result(equation_str: str, lhs_str: str, rhs_str: str,
         ),
     })
 
-    # Compute the effective highest degree
+    # Compute the effective highest degree (used for degree-based messages)
     combined = expand(lhs - rhs)
-    var_symbols = [symbols(v) for v in var_names]
+    var_symbols_list = [symbols(v) for v in var_names]
 
-    # Per-variable max degree
     max_single_var_deg = 0
-    for vs in var_symbols:
+    for vs in var_symbols_list:
         p = combined.as_poly(vs)
         if p is not None and p.degree() > max_single_var_deg:
             max_single_var_deg = p.degree()
 
-    # Total degree (catches products of variables)
     highest_deg = max_single_var_deg
     try:
-        total_poly = combined.as_poly(*var_symbols)
+        total_poly = combined.as_poly(*var_symbols_list)
         if total_poly is not None and total_poly.total_degree() > highest_deg:
             highest_deg = total_poly.total_degree()
     except Exception:
@@ -225,16 +377,52 @@ def _nonlinear_error_result(equation_str: str, lhs_str: str, rhs_str: str,
     if highest_deg < 2:
         highest_deg = degree  # fallback to what the caller passed
 
+    # Auto-refine reason for degree cases (product vs. pure high-degree)
+    if reason == "degree" and highest_deg >= 2:
+        reason = _detect_nonlinear_reason(combined, var_symbols_list, highest_deg)
+
+    # Step 3 (denominator only): highlight the negative-exponent form
+    if reason == "denominator":
+        steps.append({
+            "description": "Identify variable in denominator",
+            "expression": _format_equation(lhs_exp, rhs_exp),
+            "explanation": (
+                "Notice that a variable appears in the denominator. "
+                "A term of the form 1/x is equivalent to x\u207b\u00b9 \u2014 "
+                "a negative exponent. Linear equations cannot have "
+                "negative (or zero, or fractional) exponents on their variables."
+            ),
+        })
+
+    # Step 3 (transcendental only): highlight the function
+    if reason == "transcendental":
+        steps.append({
+            "description": "Identify transcendental function",
+            "expression": _format_equation(lhs_exp, rhs_exp),
+            "explanation": (
+                "Notice that the variable is placed inside a function "
+                "(trigonometric, logarithmic, or exponential). "
+                "This is called a transcendental equation. "
+                "Linear equations require the variable to appear "
+                "on its own \u2014 not wrapped in any function."
+            ),
+        })
+
     for i, s in enumerate(steps, 1):
         s["step_number"] = i
 
     t_end = time.perf_counter()
     runtime_ms = round((t_end - t_start) * 1000, 2)
 
-    final_msg = (
-        f"Cannot solve \u2014 the highest degree of your given equation is "
-        f"{highest_deg}; a linear equation must only have a highest degree of 1."
-    )
+    # Build human-readable equation-type label for the METHOD card
+    _eq_type_label = {
+        "degree":        f"Non-linear \u2014 {_degree_name(highest_deg)} (degree {highest_deg})",
+        "denominator":   "Non-linear \u2014 variable in denominator (x\u207b\u00b9)",
+        "product":       "Non-linear \u2014 product of variables",
+        "transcendental":"Non-linear \u2014 transcendental function",
+    }.get(reason, f"Non-linear (degree {highest_deg})")
+
+    final_msg = _build_educational_message(reason, highest_deg, var_names)
 
     return {
         "equation": equation_str,
@@ -249,14 +437,18 @@ def _nonlinear_error_result(equation_str: str, lhs_str: str, rhs_str: str,
         },
         "method": {
             "name": "Linearity Check",
-            "description": "Expand and combine like terms, then verify the equation is linear.",
+            "description": (
+                "Expand and simplify the equation, then identify why "
+                "it is not linear."
+            ),
             "parameters": {
-                "equation_type": f"Non-linear (degree {highest_deg})",
+                "equation_type": _eq_type_label,
                 "variables": ", ".join(var_names),
             },
         },
         "steps": steps,
         "final_answer": final_msg,
+        "nonlinear_education": True,
         "verification_steps": [],
         "summary": {
             "runtime_ms": runtime_ms,
@@ -375,6 +567,16 @@ def solve_linear_equation(equation_str: str) -> dict:
             # fully cancelled out.  Let the step-by-step algebra run and
             # show what happened — step 4 will detect and explain it.
             pass
+        elif _has_transcendental(combined_expanded, var):
+            return _nonlinear_error_result(
+                equation_str, lhs_str, rhs_str, lhs, rhs,
+                [var_name], 1, t_start, reason="transcendental",
+            )
+        elif _has_var_in_denominator(combined_expanded, var):
+            return _nonlinear_error_result(
+                equation_str, lhs_str, rhs_str, lhs, rhs,
+                [var_name], -1, t_start, reason="denominator",
+            )
         else:
             raise ValueError("Could not determine the degree. Please check the equation.")
     elif poly_degree.degree() > 1:
@@ -822,6 +1024,18 @@ def _solve_multi_var_single_eq(equation_str: str, var_names: list,
             max_degree = total_poly.total_degree()
     except Exception:
         pass
+    # Check transcendental / denominator before the degree test
+    # (these make as_poly return None, leaving max_degree misleadingly at 0/1)
+    if _has_transcendental(combined, var_symbols):
+        return _nonlinear_error_result(
+            equation_str, lhs_str, rhs_str, lhs, rhs,
+            var_names, 1, t_start, reason="transcendental",
+        )
+    if _has_var_in_denominator(combined, var_symbols):
+        return _nonlinear_error_result(
+            equation_str, lhs_str, rhs_str, lhs, rhs,
+            var_names, -1, t_start, reason="denominator",
+        )
     if max_degree > 1:
         return _nonlinear_error_result(
             equation_str, lhs_str, rhs_str, lhs, rhs,
@@ -1006,13 +1220,25 @@ def _solve_system(raw_equations: list, var_names: list,
                 max_deg = total_poly.total_degree()
         except Exception:
             pass
-        if max_deg > 1:
-            eq_str = raw_equations[i]
-            eq_parts = eq_str.split('=')
+        eq_str_i = raw_equations[i]
+        eq_parts_i = eq_str_i.split('=')
+        _nl_lhs_s = eq_parts_i[0].strip() if len(eq_parts_i) == 2 else eq_str_i
+        _nl_rhs_s = eq_parts_i[1].strip() if len(eq_parts_i) == 2 else '0'
+        if _has_transcendental(combined, var_symbols):
             return _nonlinear_error_result(
-                original_input,
-                eq_parts[0].strip() if len(eq_parts) == 2 else eq_str,
-                eq_parts[1].strip() if len(eq_parts) == 2 else '0',
+                original_input, _nl_lhs_s, _nl_rhs_s,
+                eq_obj.lhs, eq_obj.rhs,
+                var_names, 1, t_start, reason="transcendental",
+            )
+        if _has_var_in_denominator(combined, var_symbols):
+            return _nonlinear_error_result(
+                original_input, _nl_lhs_s, _nl_rhs_s,
+                eq_obj.lhs, eq_obj.rhs,
+                var_names, -1, t_start, reason="denominator",
+            )
+        if max_deg > 1:
+            return _nonlinear_error_result(
+                original_input, _nl_lhs_s, _nl_rhs_s,
                 eq_obj.lhs, eq_obj.rhs,
                 var_names, max_deg, t_start,
             )
