@@ -71,10 +71,8 @@ class Sidebar:
     # ── Colour helpers ──────────────────────────────────────────────────
 
     def _build_colours(self) -> None:
-        from gui.app import (
-            _DARK_PALETTE, _LIGHT_PALETTE,
-        )
-        p = _DARK_PALETTE if self.app._theme == "dark" else _LIGHT_PALETTE
+        from gui.themes import DARK_PALETTE, LIGHT_PALETTE
+        p = DARK_PALETTE if self.app._theme == "dark" else LIGHT_PALETTE
         self.c = {
             "bg":       p["BG_DARKER"],
             "bg2":      p["BG"],

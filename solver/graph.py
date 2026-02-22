@@ -234,14 +234,33 @@ def analyze_result(result: dict) -> dict | None:
     final  = result.get("final_answer", "")
 
     if "equations" in inputs:
-        return _analyze_system(inputs, final)
-    if "variable" in inputs and "variables" not in inputs:
-        return _analyze_single_var(inputs, final)
-    if "variables" in inputs:
+        out = _analyze_system(inputs, final)
+    elif "variable" in inputs and "variables" not in inputs:
+        out = _analyze_single_var(inputs, final)
+    elif "variables" in inputs:
         var_list = [v.strip() for v in inputs["variables"].split(",")]
         if len(var_list) == 2:
-            return _analyze_two_var(inputs, final)
-    return None
+            out = _analyze_two_var(inputs, final)
+        else:
+            out = None
+    else:
+        out = None
+
+    if out is not None:
+        _prettify_analysis(out)
+    return out
+
+
+def _prettify_analysis(d: dict) -> None:
+    """Apply Unicode symbol clean-up to all user-visible text in *d*."""
+    for key in ("form", "description", "detail", "solution", "case_label"):
+        v = d.get(key)
+        if isinstance(v, str):
+            v = re.sub(r'(?<![a-zA-Z])pi(?![a-zA-Z])', 'π', v)
+            v = v.replace('sqrt(', '√(')
+            v = v.replace('sqrt ⟦', '√⟦')
+            v = v.replace('sqrt⟦', '√⟦')
+            d[key] = v
 
 
 def _analyze_single_var(inputs, final) -> dict:

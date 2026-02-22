@@ -128,11 +128,17 @@ _BINARY_AFTER = r'[0-9A-Za-z' + re.escape(_SUP_CHARS) + r'·\u27e7)]'
 def _prettify_symbols(s: str) -> str:
     """Replace solver-internal names with display-friendly Unicode symbols.
 
-    - ``pi``  (whole word) → ``π``
-    - ``sqrt(`` → ``√(``
+    - ``pi`` (not inside a longer word like 'pipe') → ``π``
+    - ``sqrt(`` / ``sqrt⟦`` → ``√(`` / ``√⟦``  (handles fraction markers)
     """
-    s = re.sub(r'\bpi\b', 'π', s)
+    # Use lookaround instead of \b so "2pi", "3pi" are also caught.
+    # Only require that pi is NOT surrounded by other letters.
+    s = re.sub(r'(?<![a-zA-Z])pi(?![a-zA-Z])', 'π', s)
     s = s.replace('sqrt(', '√(')
+    # Fraction conversion may consume the '(' after sqrt, leaving
+    # "sqrt⟦" or "sqrt ⟦".  Normalise those too.
+    s = s.replace('sqrt ⟦', '√⟦')
+    s = s.replace('sqrt⟦', '√⟦')
     return s
 
 

@@ -1,8 +1,4 @@
-"""
-SymSolver — Entry point.
-
-Launch the Tkinter desktop application.
-"""
+""" SymSolver — Entry point. """
 
 from gui import SymSolverApp
 
