@@ -18,10 +18,14 @@ from sympy import (
 )
 from sympy.parsing.sympy_parser import (
     parse_expr, standard_transformations, implicit_multiplication_application,
-    convert_xor
+    convert_xor, rationalize
 )
 
-TRANSFORMATIONS = standard_transformations + (implicit_multiplication_application, convert_xor)
+TRANSFORMATIONS = standard_transformations + (
+    implicit_multiplication_application,
+    convert_xor,
+    rationalize,  # Convert decimals like "12.5" to exact Rational(25, 2)
+)
 
 # Letters that SymSolver will recognise as the unknown variable.
 _ALLOWED_VARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")

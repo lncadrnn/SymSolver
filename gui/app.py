@@ -944,9 +944,17 @@ class SymSolverApp(tk.Tk):
         _bg = bg if bg is not None else VERIFY_BG
         _fg = fg if fg is not None else TEXT_BRIGHT
         if idx < len(lines):
-            self._type_label(parent, lines[idx], self._small, _bg, _fg,
-                             callback=lambda: self._type_answer_lines(
-                                 parent, lines, idx + 1, bg=bg, fg=fg))
+            line_text = lines[idx]
+            # If line contains fraction markers, render as math expression
+            if '⟦' in line_text and '⟧' in line_text:
+                self._render_math_expr(parent, line_text, self._small, _bg, _fg)
+                self._scroll_to_bottom()
+                self.after(30, lambda: self._type_answer_lines(
+                    parent, lines, idx + 1, bg=bg, fg=fg))
+            else:
+                self._type_label(parent, line_text, self._small, _bg, _fg,
+                                 callback=lambda: self._type_answer_lines(
+                                     parent, lines, idx + 1, bg=bg, fg=fg))
         else:
             self._scroll_to_bottom()
             self._schedule_next()
@@ -1104,6 +1112,7 @@ class SymSolverApp(tk.Tk):
             font = self._mono
 
         container = tk.Frame(parent, bg=bg)
+        container.pack(fill=tk.X)  # Pack the container so it's actually visible!
 
         # Handle multi-line expressions (e.g. system of equations)
         lines = text.split("\n")
@@ -1164,6 +1173,11 @@ class SymSolverApp(tk.Tk):
         if kind == "sep":
             tk.Frame(card, bg=color, height=1).pack(fill=tk.X, pady=(8, 6))
             _next()
+        elif kind == "math":
+            # Render mathematical expressions with fraction support
+            self._render_math_expr(card, text, self._bold, card_bg, color)
+            self._scroll_to_bottom()
+            self.after(30, _next)
         elif kind == "bold":
             self._type_label(card, text, self._bold, card_bg, color, callback=_next)
         elif kind == "small":
@@ -1256,7 +1270,7 @@ class SymSolverApp(tk.Tk):
                 items.append(("mono", f"\n  Condition:  {analysis['detail']}", TEXT_DIM))
             if analysis.get("solution"):
                 items.append(("sep", None, card_border))
-                items.append(("bold", f"Result:  {analysis['solution']}", card_fg))
+                items.append(("math", f"Result:  {analysis['solution']}", card_fg))
 
             self._type_analysis_items(card, card_bg, items, 0, cb)
 
