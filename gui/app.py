@@ -1010,9 +1010,11 @@ class SymSolverApp(tk.Tk):
                 self._anim_idx += 1
                 fn()
             self._instant_rendering = False
-            self._auto_scroll = False   # ensure nothing scrolls after render
+            # All content is now rendered — scroll to the very bottom
             self.update_idletasks()
-            # Do NOT auto-scroll — let user read from the top
+            self._update_scroll_region()
+            self._canvas.yview_moveto(1.0)
+            self._auto_scroll = False   # prevent further auto-scrolls
         else:
             self._advance_queue()
 
