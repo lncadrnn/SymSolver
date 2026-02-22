@@ -1,8 +1,8 @@
 # How SymSolver Parses and Solves Linear Equations
 
-I'll walk you through the entire process using **`2x + 2 = 5`** as the primary example, with a secondary example **`2x + 5x + 3 = 1 + 5`** to show how like-term combining works.
+I'll walk you through the entire process using **`2x + 2 = 5`** as the primary example, with a secondary example **`2x + 5x + 3 = 1 + 5`** to show how like-term combining works. Additional sections cover multi-variable equations, systems of equations, non-linear detection, graphing, theming, and the animated trail rendering pipeline.
 
-Every computation follows the **Standard Trail Format**, which ensures the UI always displays these six sections: **GIVEN → METHOD → STEPS → FINAL ANSWER → VERIFICATION → SUMMARY**.
+Every computation follows the **Standard Trail Format**, which ensures the UI always displays these seven sections: **GIVEN → METHOD → STEPS → FINAL ANSWER → VERIFICATION → GRAPH & ANALYSIS → SUMMARY**.
 
 ---
 
@@ -365,24 +365,47 @@ return {
 
 ---
 
-## 7. GUI Rendering — Standard Trail Format
+## 7. GUI Rendering — Standard Trail Format (Animated)
 
-Back in [`gui/app.py`](gui/app.py), the `_show_result` method renders each trail section in order:
+Back in [`gui/app.py`](gui/app.py), the `_show_result` method builds an **animation queue** — a list of callables that fire one-by-one with short pauses between them. Each callable renders one trail section with a "phase status" indicator (e.g. *"Identifying Given…"*, *"Verifying final answer…"*) that is replaced by the actual content after a brief delay.
 
 | # | Section | Icon | What the UI shows |
 |---|---------|------|-------------------|
-| 1 | **GIVEN** | 📋 | Problem statement, equation, left/right sides, variable |
+| 1 | **GIVEN** | ✎ | Problem statement, equation, left/right sides, variable(s) |
 | 2 | **METHOD** | ⚙ | Algorithm name, description, parameters (equation type, approach) |
-| 3 | **STEPS** | 📝 | Numbered step cards — each with bold description, monospace expression, and collapsible explanation |
-| 4 | **FINAL ANSWER** | ✓ | Green-bordered card with the solution (e.g. `x = 3/2`) |
-| 5 | **VERIFICATION** | 🔍 | Collapsible section with numbered substitution-check steps |
-| 6 | **SUMMARY** | 📊 | Runtime (ms), step counts, timestamp, SymPy version |
+| 3 | **STEPS** | » | Numbered step cards — each with bold description, monospace expression, and collapsible explanation |
+| 4 | **FINAL ANSWER** | ✓ | Green-bordered card with the solution (e.g. `x = 3/2`). For non-linear equations this is a multi-line educational explanation with a red/orange badge |
+| 5 | **VERIFICATION** | ≡ | Collapsible section with numbered substitution-check steps |
+| 6 | **GRAPH & ANALYSIS** | Δ | Embedded matplotlib figure + structured case-analysis card (see §9) |
+| 7 | **SUMMARY** | ■ | Runtime (ms), step counts, timestamp, SymPy version |
 
-Each section has an accent-coloured header with a thin underline, rendered by `_render_section_header()`. Step cards are produced by `_render_step()` which shows the step number prefix, and explanations are toggled via "▸ Show Explanation" / "▾ Hide Explanation" buttons.
+Each section has an accent-coloured header with a thin underline, rendered by `_render_section_header()`. Step cards are produced by the animation pipeline which shows a step-number prefix, and explanations are toggled via "▸ Show Explanation" / "▾ Hide Explanation" buttons.
+
+### Animation Pipeline
+
+```
+_show_result() builds queue: [_render_given, _render_method, _render_step×N, _render_answer, _render_verify, _render_graph, _render_summary, _finish]
+    ↓
+_advance_queue() pops the next callable
+    ↓
+Callable shows a status label ("Solving step 3…")
+    ↓
+After _PHASE_PAUSE ms → status replaced by actual content
+    ↓
+_schedule_next() → Tk.after(400ms) → _advance_queue()
+    ↓
+Repeat until queue is empty
+```
+
+A **Stop button** (⏹) appears during animation and cancels the queue when clicked, leaving partial results visible.
 
 ---
 
 ## 8. Error Handling & Fallbacks
+
+### Character validation
+
+Before any parsing, `_validate_characters()` rejects input containing characters outside the allowed set (letters, digits, whitespace, and `+ - * / ^ = ( ) . , ;`).
 
 ### Missing `=` sign
 ```python
@@ -407,11 +430,7 @@ except Exception as e:
 **Example:** `2x + + = 5` → "Could not parse expression"
 
 ### Not linear (quadratic, cubic, etc.)
-```python
-if poly_degree.degree() > 1:
-    raise ValueError("This is a degree-{degree} equation, not linear. SymSolver currently supports linear equations only.")
-```
-**Example:** `x^2 + 2 = 5` → "This is a degree-2 equation, not linear"
+Instead of raising an error, non-linear equations return a **full educational result dict** via `_nonlinear_error_result()`. See §10 for details.
 
 ### No variable found
 ```python
@@ -423,20 +442,285 @@ if poly_degree.degree() == 0:
 ### Infinite solutions (identity)
 ```python
 if val == 0:
-    raise ValueError("This equation is always true (identity). Infinite solutions.")
+    # "identity" — 0 = 0
+    final_answer = "Infinite solutions — this equation is an identity."
 ```
 **Example:** `2x + 3 = 2x + 3`
 
 ### No solution (contradiction)
 ```python
 else:
-    raise ValueError("This equation has no solution (contradiction).")
+    # "contradiction" — 0 = non-zero
+    final_answer = "No solution — this equation is a contradiction."
 ```
 **Example:** `2x + 3 = 2x + 5`
 
 ---
 
-## Summary Flow Diagram
+## 9. Multi-Variable Equations ([`solver/engine.py`](solver/engine.py) — `_solve_multi_var_single_eq`)
+
+When `_detect_variables()` finds more than one variable but there is only one equation (no comma/semicolon separator), the solver uses the multi-variable path.
+
+**Example:** `2x + 4y = 1`
+
+### 9.1 Variable Detection
+
+```python
+var_names = _detect_variables("2x + 4y = 1")  # → ['x', 'y']
+```
+
+`_detect_variables()` scans for single-letter tokens, ignoring reserved math functions (`sin`, `cos`, `log`, `exp`, `sqrt`, `pi`, `abs`, `E`). Multi-character alphabetic tokens that aren't reserved are treated as implicit multiplication of their letters (e.g. `xyz` → `x·y·z`).
+
+### 9.2 Implicit Variable Expansion
+
+Before parsing, `_expand_implicit_vars()` converts multi-letter tokens composed entirely of known variable letters into explicit multiplication. This prevents Python reserved words (e.g. `as`, `in`, `for`) from causing syntax errors:
+
+```python
+_expand_implicit_vars("2as + 3", {"a", "s"})  # → "2a*s + 3"
+```
+
+### 9.3 Linearity Validation
+
+The solver checks:
+1. **Per-variable degree** — each variable individually must be degree ≤ 1
+2. **Total degree** — the combined polynomial degree must be ≤ 1 (catches cross-products like `x·y`)
+3. **Transcendental functions** — `sin(x)`, `log(y)`, etc. make the equation non-linear
+4. **Denominator variables** — `1/x` is equivalent to `x⁻¹`, also non-linear
+
+If any check fails, the solver returns an educational non-linear result (§10).
+
+### 9.4 Solving
+
+For each variable, SymPy's `solve()` isolates it in terms of the remaining variables:
+
+```python
+# For 2x + 4y = 1:
+#   x = (1 - 4y) / 2 = 1/2 - 2y
+#   y = (1 - 2x) / 4 = 1/4 - x/2
+```
+
+### 9.5 Trail Output
+
+The method card shows **"Algebraic Isolation (Multi-Variable)"** and the given card lists all detected variables. The final answer shows each variable expressed in terms of the others.
+
+---
+
+## 10. Non-Linear Equation Detection & Education
+
+When the solver determines an equation is not linear, it does **not** raise an error. Instead, `_nonlinear_error_result()` builds a complete trail dict with:
+
+- A **GIVEN** card showing the original equation
+- A **METHOD** card labelled "Linearity Check"
+- **STEPS** that expand and identify the non-linear element
+- A **FINAL ANSWER** containing a multi-line educational explanation
+
+### 10.1 Detection Reasons
+
+`_detect_nonlinear_reason()` classifies the non-linearity:
+
+| Reason | Detection | Example |
+|--------|-----------|---------|
+| `degree` | Polynomial degree > 1 | `x² + 2 = 5` |
+| `transcendental` | Variable inside trig/log/exp | `sin(x) = 1` |
+| `denominator` | Variable in denominator | `1/x + 1 = 3` |
+| `product` | Total degree ≥ 2 from cross-terms | `x·y = 6` |
+
+### 10.2 Educational Messages
+
+`_build_educational_message()` generates a detailed explanation for each reason. For degree-based cases, it includes a classification table:
+
+```
+Degree 0  →  constant   (e.g.  5 = 5)
+Degree 1  →  linear     (e.g.  2x + 3 = 7)  ← must be this
+Degree 2  →  quadratic  (e.g.  x² + 5x + 6 = 0)
+Degree 3  →  cubic      (e.g.  x³ − 2x² + x = 0)
+...
+```
+
+For denominator cases it explains negative exponents; for transcendental cases it explains why functions like `sin(x)` break linearity.
+
+### 10.3 Trail Differences
+
+Non-linear results include `"nonlinear_education": True` which tells the GUI to:
+- Use a coloured badge (red/orange) instead of the green success badge
+- Skip the verification section (no solution to verify)
+- Skip the graph section (non-linear equations are not graphed)
+
+---
+
+## 11. Systems of Equations ([`solver/engine.py`](solver/engine.py) — `_solve_system`)
+
+When the input contains commas or semicolons, `solve_linear_equation()` splits it into multiple equations and dispatches to `_solve_system()`.
+
+**Example:** `x + y = 10, x - y = 2`
+
+### 11.1 Parsing
+
+Each equation is parsed independently. All detected variables are shared across the system:
+
+```python
+raw_equations = ["x + y = 10", "x - y = 2"]
+var_names = _detect_variables("x + y = 10 x - y = 2")  # → ['x', 'y']
+```
+
+### 11.2 Linearity Check
+
+Every equation in the system is individually checked for linearity (degree, transcendental, denominator, product). If any equation is non-linear, the entire system returns an educational result.
+
+### 11.3 Solving (2×2 Systems — Substitution Method)
+
+For a 2-equation, 2-variable system, the solver shows detailed substitution steps:
+
+```
+Step 1: System of equations
+Step 2: From equation (1), isolate x  →  x = 10 - y
+Step 3: Substitute into equation (2)  →  (10 - y) - y = 2
+Step 4: Solve for y  →  y = 4
+Step 5: Back-substitute to find x  →  x = 6
+```
+
+### 11.4 Inconsistent Systems (No Solution)
+
+When `solve()` returns an empty solution, the solver shows **elimination steps** to expose the contradiction:
+
+```
+Step 1: System of equations
+Step 2: Subtract equation (1) from equation (2)
+Step 3: Simplify both sides  →  0 = 3
+Step 4: Contradiction — No Solution
+```
+
+The method card shows **"Elimination Method (Inconsistent System)"**.
+
+### 11.5 Underdetermined Systems (Free Variables)
+
+When there are fewer equations than variables, some variables are marked as free:
+
+```python
+final_answer = "x = ...\ny is a free variable"
+```
+
+A "Parametric solution" step identifies the free variables.
+
+### 11.6 Larger Systems
+
+For systems with more than 2 equations or more than 2 variables, the solver uses SymPy's general `solve()` and shows a generic solution step. The method card shows **"Linear System Solver"** with approach "Row reduction → Back-substitution".
+
+### 11.7 Single-Variable Systems
+
+When all equations in a comma-separated system share a single variable (e.g. `3x = 6, 2x = 4`), the solver detects this and still uses the system path but with 1-variable-specific handling.
+
+---
+
+## 12. Graphing & Analysis ([`solver/graph.py`](solver/graph.py))
+
+After the solver returns a result dict, the GUI builds a matplotlib figure and a structured analysis card.
+
+### 12.1 Graph Builder — `build_figure()`
+
+`build_figure()` inspects the result's `given.inputs` to determine the equation type and dispatches to the appropriate builder:
+
+| Equation type | Builder function | What it plots |
+|--------------|-----------------|---------------|
+| Single-variable (`"variable"` key) | `_build_single_var()` | LHS and RHS as functions of x; intersection dot at solution |
+| Two-variable (`"variables"` with 2 vars) | `_build_two_var()` | y solved in terms of x; line in xy-plane |
+| System (`"equations"` key) | `_build_system()` | Two lines in xy-plane; intersection point, parallel lines, or overlapping lines |
+| 3+ variables | `_build_multi_var_projection()` | Projects onto the first two variables |
+| 1-variable system | `_build_single_var_system()` | LHS and RHS of each equation; solid vs dotted lines |
+
+All figures use a consistent style via `_style_axes()`:
+- Dark/light background matching the current theme
+- Grid lines, axis labels, tick colours from the theme palette
+- Colour-coded lines (blue for line 1, orange for line 2)
+- Green dot at the solution point
+- Legend with transparent background
+
+**Anomaly handling:** Figures show special titles for no-solution ("Lines are parallel") and infinite-solution ("Lines overlap") cases.
+
+### 12.2 Case Analysis — `analyze_result()`
+
+`analyze_result()` returns a structured dict describing the mathematical case:
+
+```python
+{
+    "eq_type":     "single_var" | "two_var" | "system",
+    "case":        "one_solution" | "no_solution" | "infinite" | "degenerate_identity" | "degenerate_contradiction",
+    "case_label":  "Normal Case — One Solution",
+    "form":        "ax + b = 0",
+    "description": "The coefficient of x is non-zero...",
+    "detail":      "a ≠ 0  →  x = –b / a",
+    "solution":    "x = 3/2",
+    "graphable":   True,
+}
+```
+
+The GUI renders this as a bordered card with:
+- A colour-coded case badge (green for one solution, yellow for infinite, red for no solution)
+- The algebraic form
+- A multi-line description of the mathematical case
+- The algebraic condition that leads to this case
+
+### 12.3 Live Theme Switching
+
+`restyle_figure()` re-colours an already-built figure in-place when the theme toggles. It builds a colour translation table from the old palette to the new one and applies it to every figure element (background, axes, spines, lines, scatter points, grid, text, legend).
+
+---
+
+## 13. Display Formatting ([`solver/engine.py`](solver/engine.py))
+
+### 13.1 Expression Formatting — `_format_expr()`
+
+Converts SymPy expressions into human-readable strings:
+- `**N` → Unicode superscript (`x**2` → `x²`)
+- `*` between coefficient and variable removed (`2*x` → `2x`)
+- Remaining `*` replaced with `·`
+- Simple fractions converted to stacked markers: `3/2` → `⟦3|2⟧`
+- Parenthesised fractions: `(2x + 3)/5` → `⟦2x + 3|5⟧`
+
+The GUI's `_render_fraction()` method parses `⟦num|den⟧` markers and renders them as vertically stacked fractions with a horizontal line.
+
+### 13.2 Input Formatting — `_format_input_str()`
+
+Like `_format_expr()` but operates on the **raw user input** rather than a SymPy expression. This preserves the exact term order and notation the user typed (e.g. `1/x + 1` stays `1/x + 1`, not SymPy's reordered form).
+
+### 13.3 Spacing Normalisation — `_normalize_spacing()`
+
+Ensures exactly one space around binary operators (`+`, `-`, `=`). Respects:
+- Fraction markers (content inside `⟦…⟧` is never touched)
+- Unary minus (no space before a leading `-`)
+- Superscript characters (not treated as operators)
+
+---
+
+## 14. Dark / Light Theming ([`gui/app.py`](gui/app.py))
+
+### 14.1 Palette System
+
+Two palette dicts (`_DARK_PALETTE`, `_LIGHT_PALETTE`) define every colour used in the UI — background, text, accents, step cards, input bar, scrollbar, success/error colours, and verification backgrounds.
+
+The graph module has its own palettes (`_DARK_GRAPH`, `_LIGHT_GRAPH`) for figure-specific colours.
+
+Case-analysis badge colours are defined in `_DARK_CASE_COLORS` and `_LIGHT_CASE_COLORS`.
+
+### 14.2 Theme Toggle
+
+Clicking "☀ Light" / "🌙 Dark" in the header triggers `_toggle_theme()`:
+
+1. Flips `self._theme` between `"dark"` and `"light"`
+2. Calls `_refresh_header_logo()` to swap the PNG logo
+3. Calls `_apply_theme()` which:
+   - Updates all module-level colour globals
+   - Re-styles every static widget (header, input bar, scrollbar, canvas)
+   - Calls `_retheme_chat()` to translate colours on every widget already in the chat
+   - Calls `_retheme_graphs()` to re-colour all embedded matplotlib figures via `restyle_figure()`
+
+### 14.3 Logo Loading
+
+The header logo is loaded from `assets/darkmode-logo.png` or `assets/lightmode-logo.png` via Pillow. If Pillow is unavailable or the image is missing, a text label ("SymSolver") is shown as a fallback.
+
+---
+
+## 15. Summary Flow Diagram
 
 ```
 User Input: "2x + 5x + 3 = 1 + 5"
@@ -447,15 +731,23 @@ Background thread: solve_linear_equation()
     ↓
 Start timer (time.perf_counter)
     ↓
+Validate characters (_validate_characters)
+    ↓
+Split on , or ; → detect system vs single equation
+    ↓
+_detect_variables() → ['x']   (single variable)
+    ↓
 Check for '='  ✓
     ↓
 Split into ["2x + 5x + 3", "1 + 5"]
+    ↓
+_expand_implicit_vars() (no-op for single-letter vars)
     ↓
 Parse with SymPy → (7*x + 3, 6)   ← auto-combines like terms
     ↓
 Validate: degree == 1?  ✓
     ↓
-Step 1: Show original equation as typed
+Step 1: Show original equation as typed (_format_input_eq)
     ↓
 Detect auto-simplification:
   _count_terms_in_str("2x + 5x + 3") = 3,  Add.make_args(7x + 3) = 2
@@ -471,18 +763,23 @@ Generate remaining solving steps:
   └─ Simplify to get the answer
     ↓
 Generate trail sections:
-  ┌─ GIVEN:        problem + inputs
-  ├─ METHOD:       Algebraic Isolation + parameters
-  ├─ STEPS:        numbered solving steps (with combine/expand)
-  ├─ FINAL ANSWER: x = 3/7
-  ├─ VERIFICATION: substitution check (5 steps)
-  └─ SUMMARY:      runtime, timestamp, SymPy version
+  ┌─ GIVEN:           problem + inputs
+  ├─ METHOD:          Algebraic Isolation + parameters
+  ├─ STEPS:           numbered solving steps (with combine/expand)
+  ├─ FINAL ANSWER:    x = 3/7
+  ├─ VERIFICATION:    substitution check (5 steps)
+  └─ SUMMARY:         runtime, timestamp, SymPy version
     ↓
 Return result dict
     ↓
-GUI renders all 6 trail sections
+GUI builds animation queue
     ↓
-User sees complete Standard Trail Format
+Animated rendering: GIVEN → METHOD → STEPS → FINAL ANSWER → VERIFICATION → GRAPH & ANALYSIS → SUMMARY
+    ↓
+build_figure() → matplotlib Figure (LHS/RHS intersection plot)
+analyze_result() → case analysis card (one_solution badge)
+    ↓
+User sees complete Standard Trail Format with embedded graph
 ```
 
 ---
@@ -490,10 +787,14 @@ User sees complete Standard Trail Format
 ## Architecture Summary
 
 This architecture separates concerns cleanly:
-- **GUI** (`gui/app.py`) handles the Tkinter desktop interface and renders the Standard Trail Format
-- **Solver** (`solver/engine.py`) focuses on symbolic math, validation, and producing the trail data
+- **GUI** (`gui/app.py`) handles the Tkinter desktop interface, animated trail rendering, and live theme switching
+- **Solver** (`solver/engine.py`) focuses on symbolic math, validation, step generation, and non-linearity education
+- **Graph** (`solver/graph.py`) builds matplotlib figures for each equation type and provides structured case analysis
 
 The system uses:
-- **SymPy** for symbolic mathematics and parsing
-- **Tkinter** for the desktop GUI
+- **SymPy** for symbolic mathematics, parsing, and solving
+- **Matplotlib** + **NumPy** for embedded equation graphs
+- **Tkinter** for the desktop GUI with dark/light theming
+- **Pillow** (optional) for PNG logo rendering
 - **Standard Trail Format** for consistent, structured output on every computation
+- **Animated queue pipeline** for sequential section-by-section rendering
