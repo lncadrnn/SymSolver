@@ -258,7 +258,7 @@ class Sidebar:
         # Divider + version
         self._divider()
         tk.Label(self._inner, text="SymSolver v1.0", font=self._font_small,
-                 bg=c["bg"], fg=c["border"]).pack(anchor="w", padx=20, pady=(4, 20))
+                 bg=c["bg"], fg=c["dim"]).pack(anchor="w", padx=20, pady=(4, 20))
 
     # ── Login page ──────────────────────────────────────────────────────
 
@@ -678,12 +678,12 @@ class Sidebar:
 
     def _divider(self) -> None:
         c = self.c
-        tk.Frame(self._inner, bg=c["border"], height=1).pack(
+        tk.Frame(self._inner, bg=c["dim"], height=1).pack(
             fill=tk.X, padx=20, pady=(12, 8))
 
     def _divider_in(self, parent: tk.Frame) -> None:
         c = self.c
-        tk.Frame(parent, bg=c["border"], height=1).pack(
+        tk.Frame(parent, bg=c["dim"], height=1).pack(
             fill=tk.X, pady=(6, 2))
 
     # ── Button helpers ──────────────────────────────────────────────────
