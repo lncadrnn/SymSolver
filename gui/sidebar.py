@@ -190,8 +190,6 @@ class Sidebar:
             self._render_register()
         elif self._page == "history":
             self._render_history()
-        elif self._page == "settings":
-            self._render_settings()
 
         self._canvas.yview_moveto(0)
 
@@ -253,7 +251,7 @@ class Sidebar:
         if self._current_user:
             self._make_menu_button(menu, "📋  History", lambda: self._go_page("history"))
 
-        self._make_menu_button(menu, "⚙  Settings", lambda: self._go_page("settings"))
+        self._make_menu_button(menu, "⚙  Settings", self._open_settings)
 
         # Divider + version
         self._divider()
@@ -515,107 +513,12 @@ class Sidebar:
                   bd=0, padx=20, pady=8, cursor="hand2",
                   command=lambda: self._go_page("history")).pack(side=tk.LEFT)
 
-    # ── Settings page ───────────────────────────────────────────────────
+    # ── Settings page — now opens as full page in the app ─────────────
 
-    def _render_settings(self) -> None:
-        c = self.c
-        self._back_header("Settings")
-
-        settings = get_settings(self._current_user_key)
-
-        form = tk.Frame(self._inner, bg=c["bg"])
-        form.pack(fill=tk.X, padx=20, pady=(16, 0))
-
-        # ── Theme ───────────────────────────────────────────────────────
-        tk.Label(form, text="Theme", font=self._font_bold, bg=c["bg"],
-                 fg=c["fg"]).pack(anchor="w", pady=(0, 6))
-
-        theme_var = tk.StringVar(value=settings.get("theme", "dark"))
-        theme_frame = tk.Frame(form, bg=c["bg"])
-        theme_frame.pack(fill=tk.X, pady=(0, 14))
-
-        for val, label in [("dark", "🌙 Dark"), ("light", "☀ Light")]:
-            rb = tk.Radiobutton(
-                theme_frame, text=label, variable=theme_var, value=val,
-                font=self._font, bg=c["bg"], fg=c["fg"],
-                selectcolor=c["card"], activebackground=c["bg"],
-                activeforeground=c["accent"],
-                highlightthickness=0, bd=0, cursor="hand2",
-            )
-            rb.pack(anchor="w", pady=2)
-
-        # ── Animation Speed ─────────────────────────────────────────────
-        self._divider_in(form)
-        tk.Label(form, text="Animation Speed", font=self._font_bold,
-                 bg=c["bg"], fg=c["fg"]).pack(anchor="w", pady=(10, 6))
-
-        speed_var = tk.StringVar(value=settings.get("animation_speed", "normal"))
-        speed_frame = tk.Frame(form, bg=c["bg"])
-        speed_frame.pack(fill=tk.X, pady=(0, 14))
-
-        for val, label in [("slow", "🐢 Slow"), ("normal", "⚡ Normal"),
-                           ("fast", "🚀 Fast"), ("instant", "⏭ Instant")]:
-            rb = tk.Radiobutton(
-                speed_frame, text=label, variable=speed_var, value=val,
-                font=self._font, bg=c["bg"], fg=c["fg"],
-                selectcolor=c["card"], activebackground=c["bg"],
-                activeforeground=c["accent"],
-                highlightthickness=0, bd=0, cursor="hand2",
-            )
-            rb.pack(anchor="w", pady=2)
-
-        # ── Auto-Scroll ─────────────────────────────────────────────────
-        self._divider_in(form)
-        auto_var = tk.BooleanVar(value=settings.get("auto_scroll", True))
-        tk.Checkbutton(
-            form, text="  Auto-scroll to bottom", variable=auto_var,
-            font=self._font, bg=c["bg"], fg=c["fg"],
-            selectcolor=c["card"], activebackground=c["bg"],
-            activeforeground=c["accent"],
-            highlightthickness=0, bd=0, cursor="hand2",
-        ).pack(anchor="w", pady=(10, 4))
-
-        # ── Auto-expand verification ────────────────────────────────────
-        verify_var = tk.BooleanVar(value=settings.get("show_verification", False))
-        tk.Checkbutton(
-            form, text="  Auto-expand verification", variable=verify_var,
-            font=self._font, bg=c["bg"], fg=c["fg"],
-            selectcolor=c["card"], activebackground=c["bg"],
-            activeforeground=c["accent"],
-            highlightthickness=0, bd=0, cursor="hand2",
-        ).pack(anchor="w", pady=(4, 4))
-
-        # ── Auto-expand graph ───────────────────────────────────────────
-        graph_var = tk.BooleanVar(value=settings.get("show_graph", True))
-        tk.Checkbutton(
-            form, text="  Auto-expand graph & analysis", variable=graph_var,
-            font=self._font, bg=c["bg"], fg=c["fg"],
-            selectcolor=c["card"], activebackground=c["bg"],
-            activeforeground=c["accent"],
-            highlightthickness=0, bd=0, cursor="hand2",
-        ).pack(anchor="w", pady=(4, 14))
-
-        # ── Save button ────────────────────────────────────────────────
-        msg_label = tk.Label(form, text="", font=self._font_small, bg=c["bg"],
-                             fg=c["success"])
-        msg_label.pack(anchor="w", pady=(0, 6))
-
-        def _save():
-            new_settings = {
-                "theme": theme_var.get(),
-                "animation_speed": speed_var.get(),
-                "auto_scroll": auto_var.get(),
-                "show_verification": verify_var.get(),
-                "show_graph": graph_var.get(),
-            }
-            save_settings(new_settings, self._current_user_key)
-            self._apply_settings_to_app(new_settings)
-            msg_label.configure(text="✓ Settings saved!", fg=c["success"])
-            self.app.after(2000, lambda: msg_label.configure(text=""))
-
-        btn_frame = tk.Frame(form, bg=c["bg"])
-        btn_frame.pack(fill=tk.X, pady=(0, 20))
-        self._make_accent_button(btn_frame, "Save Settings", _save, fill=True)
+    def _open_settings(self) -> None:
+        """Close sidebar and open the full-page settings view."""
+        self.close()
+        self.app.show_settings_page()
 
     # ── Apply user settings to the running app ──────────────────────────
 
@@ -634,6 +537,9 @@ class Sidebar:
             self.app._apply_theme()
             self._build_colours()
             self._apply_colours()
+            # Re-render sidebar page if open so colours update
+            if self._open:
+                self._render_page()
 
         # Animation speed
         speed = settings.get("animation_speed", "normal")
@@ -642,8 +548,9 @@ class Sidebar:
         pause_map = {"slow": 2200, "normal": 1500, "fast": 600, "instant": 0}
         self.app._PHASE_PAUSE = pause_map.get(speed, 1500)
 
-        # Auto-scroll
-        self.app._auto_scroll = settings.get("auto_scroll", True)
+        # Display toggles
+        self.app._show_verification = settings.get("show_verification", False)
+        self.app._show_graph = settings.get("show_graph", True)
 
     # ── Logout ──────────────────────────────────────────────────────────
 

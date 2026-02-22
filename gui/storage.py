@@ -18,7 +18,6 @@ _DATA_FILE = os.path.join(_DATA_DIR, "symsolver.json")
 DEFAULT_SETTINGS = {
     "theme": "dark",
     "animation_speed": "normal",   # "slow", "normal", "fast", "instant"
-    "auto_scroll": True,
     "show_verification": False,    # auto-expand verification section
     "show_graph": True,            # auto-expand graph section
 }
