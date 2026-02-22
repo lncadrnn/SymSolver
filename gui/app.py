@@ -797,7 +797,7 @@ class SymSolverApp(tk.Tk):
 
     def _animate_given(self, parent, given, result, status_lbl):
         status_lbl.destroy()
-        self._render_section_header(parent, "GIVEN", "📋")
+        self._render_section_header(parent, "GIVEN", "✎")
         given_frame = self._make_card(parent, STEP_BG)
         problem_text = given.get("problem", result["equation"])
         inputs = given.get("inputs", {})
@@ -862,7 +862,7 @@ class SymSolverApp(tk.Tk):
         # Show STEPS header once (before the first step)
         if not getattr(self, '_steps_header_shown', False):
             self._steps_header_shown = True
-            self._render_section_header(parent, "STEPS", "📝")
+            self._render_section_header(parent, "STEPS", "»")
 
         wrapper = tk.Frame(parent, bg=STEP_BORDER, padx=1, pady=1)
         wrapper.pack(fill=tk.X, pady=4)
@@ -988,7 +988,7 @@ class SymSolverApp(tk.Tk):
 
     def _animate_verification(self, parent, v_steps, status_lbl):
         status_lbl.destroy()
-        self._render_section_header(parent, "VERIFICATION", "🔍")
+        self._render_section_header(parent, "VERIFICATION", "≡")
 
         container = tk.Frame(parent, bg=BOT_BG)
         container.pack(fill=tk.X, pady=(8, 0))
@@ -1070,7 +1070,7 @@ class SymSolverApp(tk.Tk):
 
     def _animate_summary(self, parent, summary, status_lbl):
         status_lbl.destroy()
-        self._render_section_header(parent, "SUMMARY", "📊")
+        self._render_section_header(parent, "SUMMARY", "■")
         sum_frame = self._make_card(parent, STEP_BG)
         details = [
             ("Runtime", f"{summary.get('runtime_ms', '?')} ms"),
@@ -1237,7 +1237,7 @@ class SymSolverApp(tk.Tk):
             self._schedule_next()
             return
 
-        self._render_section_header(parent, "GRAPH & ANALYSIS", "\U0001f4c8")
+        self._render_section_header(parent, "GRAPH & ANALYSIS", "Δ")
 
         container = tk.Frame(parent, bg=BOT_BG)
         container.pack(fill=tk.X, pady=(4, 0))
