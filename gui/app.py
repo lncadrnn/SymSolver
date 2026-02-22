@@ -123,9 +123,12 @@ class SymSolverApp(tk.Tk):
         self._show_verification: bool = False  # auto-expand verification
         self._show_graph: bool = True          # auto-expand graph & analysis
         self._settings_visible: bool = False   # full-page settings open?
+        self._solve_gen: int = 0               # generation counter — incremented on clear
 
         self._build_ui()
         self._sidebar = Sidebar(self)
+        # Apply saved guest settings on startup (animation speed, display toggles)
+        self._sidebar._apply_user_settings()
         self._show_welcome()
 
         # bind Enter
@@ -137,7 +140,7 @@ class SymSolverApp(tk.Tk):
     # ── UI construction ─────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
-        # ── Main content wrapper (shifts when sidebar opens) ─────────
+        # ── Main content wrapper ─────────────────────────────────────
         self._content = tk.Frame(self, bg=BG)
         self._content.pack(fill=tk.BOTH, expand=True)
 
@@ -533,6 +536,7 @@ class SymSolverApp(tk.Tk):
         # Cancel any running animation
         self._anim_queue = []
         self._anim_idx = 0
+        self._solve_gen += 1  # invalidate all pending after() callbacks
         self._auto_scroll = True
         self._graph_panels.clear()
         for w in self._chat_frame.winfo_children():
@@ -565,13 +569,16 @@ class SymSolverApp(tk.Tk):
         loading_label = self._add_loading()
 
         # solve in background thread
+        gen = self._solve_gen
         def _solve():
             try:
                 result = solve_linear_equation(equation)
-                self.after(0, lambda: self._show_result(result, loading_label))
+                self.after(0, lambda: self._show_result(result, loading_label)
+                           if self._solve_gen == gen else None)
             except Exception as exc:
                 msg = self._friendly_error(equation, exc)
-                self.after(0, lambda: self._show_error(msg, loading_label))
+                self.after(0, lambda: self._show_error(msg, loading_label)
+                           if self._solve_gen == gen else None)
 
         threading.Thread(target=_solve, daemon=True).start()
 
@@ -602,6 +609,7 @@ class SymSolverApp(tk.Tk):
         """Abort any running animation and re-enable input."""
         self._anim_queue = []
         self._anim_idx = 0
+        self._solve_gen += 1  # invalidate pending callbacks
         self._set_input_state(True)
         self._entry.focus_set()
 
@@ -657,31 +665,60 @@ class SymSolverApp(tk.Tk):
 
     def _type_label(self, parent, full_text, font, bg, fg, anchor="w",
                     wraplength=880, justify=tk.LEFT, callback=None):
-        """Create a label and type *full_text* into it character-by-character."""
+        """Create a label and type *full_text* into it character-by-character.
+        When _TYPING_SPEED is 0 the full text appears instantly."""
         lbl = tk.Label(parent, text="", font=font, bg=bg, fg=fg,
                        anchor=anchor, wraplength=wraplength, justify=justify)
         lbl.pack(fill=tk.X)
-        self._type_chars(lbl, full_text, 0, callback)
+        if self._TYPING_SPEED == 0:
+            lbl.configure(text=full_text)
+            self._scroll_to_bottom()
+            if callback:
+                callback()
+        else:
+            self._type_chars(lbl, full_text, 0, callback)
 
     def _type_chars(self, lbl, text, idx, callback):
+        gen = self._solve_gen
         if idx <= len(text):
             lbl.configure(text=text[:idx])
             self._scroll_to_bottom()
-            self.after(self._TYPING_SPEED, self._type_chars, lbl, text, idx + 1, callback)
+            self.after(self._TYPING_SPEED,
+                       lambda: self._type_chars(lbl, text, idx + 1, callback)
+                       if self._solve_gen == gen else None)
         else:
             if callback:
                 callback()
 
     def _show_status(self, parent, text, bg=None):
-        """Show an italicised status line like 'Identifying Given...'."""
+        """Show an italicised status line like 'Identifying Given...'
+        When instant mode (_PHASE_PAUSE == 0) returns a hidden dummy
+        label so callers can still call .destroy() safely."""
         if bg is None:
             bg = BOT_BG
+        if self._PHASE_PAUSE == 0:
+            # Instant mode — create an unmapped dummy so destroy() works
+            lbl = tk.Label(parent)
+            return lbl
         status_font = tkfont.Font(family="Segoe UI", size=12, slant="italic")
         lbl = tk.Label(parent, text=text, font=status_font, bg=bg,
                        fg=TEXT_DIM, anchor="w")
         lbl.pack(fill=tk.X, pady=(6, 2))
         self._scroll_to_bottom()
         return lbl
+
+    def _phase_then(self, status_lbl, callback):
+        """Wait _PHASE_PAUSE ms then call *callback*.  If instant, call now.
+        The callback is responsible for destroying *status_lbl*."""
+        if self._PHASE_PAUSE == 0:
+            callback()
+        else:
+            gen = self._solve_gen
+            def _go():
+                if self._solve_gen != gen:
+                    return
+                callback()
+            self.after(self._PHASE_PAUSE, _go)
 
     def _step_verb(self, description: str) -> str:
         """Derive a contextual action word from a step description."""
@@ -750,7 +787,7 @@ class SymSolverApp(tk.Tk):
             def _render_step(s=s):
                 verb = self._step_verb(s["description"])
                 status = self._show_status(bot, verb)
-                self.after(self._PHASE_PAUSE, lambda: self._animate_step(
+                self._phase_then(status, lambda: self._animate_step(
                     bot, s, status))
 
             queue.append(_render_step)
@@ -764,7 +801,7 @@ class SymSolverApp(tk.Tk):
                 if _is_educational else "Finalizing answer..."
             )
             status = self._show_status(bot, _status_text)
-            self.after(self._PHASE_PAUSE, lambda: self._animate_answer(
+            self._phase_then(status, lambda: self._animate_answer(
                 bot, result["final_answer"], status,
                 educational=_is_educational))
 
@@ -776,7 +813,7 @@ class SymSolverApp(tk.Tk):
 
             def _render_verify():
                 status = self._show_status(bot, "Verifying final answer...")
-                self.after(self._PHASE_PAUSE, lambda: self._animate_verification(
+                self._phase_then(status, lambda: self._animate_verification(
                     bot, v_steps, status))
 
             queue.append(_render_verify)
@@ -794,7 +831,7 @@ class SymSolverApp(tk.Tk):
         if summary:
             def _render_summary():
                 status = self._show_status(bot, "Summarizing...")
-                self.after(self._PHASE_PAUSE, lambda: self._animate_summary(
+                self._phase_then(status, lambda: self._animate_summary(
                     bot, summary, status))
 
             queue.append(_render_summary)
@@ -827,8 +864,17 @@ class SymSolverApp(tk.Tk):
         # else: done
 
     def _schedule_next(self, delay_ms: int = 400):
-        """Schedule the next queue item after a short pause."""
-        self.after(delay_ms, self._advance_queue)
+        """Schedule the next queue item after a short pause.
+        When instant mode, use after(0) to keep UI responsive."""
+        gen = self._solve_gen
+        def _go():
+            if self._solve_gen != gen:
+                return  # chat was cleared — discard
+            self._advance_queue()
+        if self._PHASE_PAUSE == 0:
+            self.after(0, _go)
+        else:
+            self.after(delay_ms, _go)
 
     # ── Individual animated section builders ────────────────────────────
 
@@ -1013,7 +1059,8 @@ class SymSolverApp(tk.Tk):
             if '⟦' in line_text and '⟧' in line_text:
                 self._render_math_expr(parent, line_text, self._small, _bg, _fg)
                 self._scroll_to_bottom()
-                self.after(30, lambda: self._type_answer_lines(
+                _delay = 0 if self._TYPING_SPEED == 0 else 30
+                self.after(_delay, lambda: self._type_answer_lines(
                     parent, lines, idx + 1, bg=bg, fg=fg))
             else:
                 self._type_label(parent, line_text, self._small, _bg, _fg,
@@ -1105,8 +1152,13 @@ class SymSolverApp(tk.Tk):
 
             def _next():
                 self._scroll_to_bottom()
-                self.after(self._PHASE_PAUSE,
-                           lambda: self._type_verify_steps(parent, steps, idx + 1))
+                if self._PHASE_PAUSE == 0:
+                    self._type_verify_steps(parent, steps, idx + 1)
+                else:
+                    gen = self._solve_gen
+                    self.after(self._PHASE_PAUSE,
+                               lambda: self._type_verify_steps(parent, steps, idx + 1)
+                               if self._solve_gen == gen else None)
 
             self._type_label(card, desc, self._bold, STEP_BG, TEXT_BRIGHT,
                              callback=_after_desc)
@@ -1249,7 +1301,8 @@ class SymSolverApp(tk.Tk):
             # Render mathematical expressions with fraction support
             self._render_math_expr(card, text, self._bold, card_bg, color)
             self._scroll_to_bottom()
-            self.after(30, _next)
+            _delay = 0 if self._TYPING_SPEED == 0 else 30
+            self.after(_delay, _next)
         elif kind == "bold":
             self._type_label(card, text, self._bold, card_bg, color, callback=_next)
         elif kind == "small":

@@ -2,7 +2,7 @@
 SymSolver — Sidebar panel (hamburger menu).
 
 Provides login/register, settings (all users), and history (logged-in only).
-The sidebar sits to the left of the main content, pushing it aside when open.
+The sidebar overlays on top of the main content with a dimmed backdrop.
 """
 
 import tkinter as tk
@@ -17,19 +17,16 @@ from gui.storage import (
 )
 
 
-# ── Sidebar dimensions & animation ──────────────────────────────────────
+# ── Sidebar dimensions ──────────────────────────────────────────────────
 _SIDEBAR_W = 340
-_ANIM_STEP = 85      # pixels per frame (fast snap)
-_ANIM_DELAY = 6      # ms between frames
 
 
 class Sidebar:
-    """Manages the slide-in sidebar and its overlay dimmer."""
+    """Manages the slide-in sidebar overlay with dimmed backdrop."""
 
     def __init__(self, app: "SymSolverApp") -> None:  # type: ignore[name-defined]
         self.app = app
         self._open = False
-        self._anim_id = None  # after() id for cancelling in-flight animation
         self._current_user: Optional[str] = None  # display name (None = guest)
         self._current_user_key: Optional[str] = None  # lowercase key
 
@@ -41,11 +38,13 @@ class Sidebar:
         self._font_icon  = tkfont.Font(family="Segoe UI", size=18)
         self._font_hist  = tkfont.Font(family="Consolas", size=12)
 
-        # ── Sidebar container — packed LEFT of the _content frame ───────
-        # It lives directly inside the root window (app), to the left
-        # of app._content.  When hidden its width is 0.
-        self._panel = tk.Frame(app, width=0, bg="#050505")
-        self._panel.pack(side=tk.LEFT, fill=tk.Y, before=app._content)
+        # ── Backdrop — dark overlay behind sidebar ───────────────────────
+        self._backdrop = tk.Frame(app, bg="#000000")
+        # Not placed yet — shown on open
+
+        # ── Sidebar panel — overlays on top using place() ────────────────
+        self._panel = tk.Frame(app, width=_SIDEBAR_W, bg="#050505")
+        self._panel.place_forget()  # hidden initially
         self._panel.pack_propagate(False)
 
         # inner scrollable area
@@ -59,7 +58,6 @@ class Sidebar:
                              scrollregion=self._canvas.bbox("all")))
         self._canvas.bind("<Configure>",
                           lambda e: self._canvas.itemconfig("inner", width=e.width))
-        self._canvas.bind_all("<MouseWheel>", self._on_scroll, add="+")
 
         # Track current "page" inside sidebar
         self._page = "main"  # "main" | "login" | "register" | "history" | "settings"
@@ -107,8 +105,9 @@ class Sidebar:
     def _on_scroll(self, event: tk.Event) -> None:
         if self._open:
             self._canvas.yview_scroll(int(-event.delta / 120), "units")
+            return "break"  # consume event so main chat doesn't scroll
 
-    # ── Open / Close ────────────────────────────────────────────────────
+    # ── Open / Close (instant overlay) ──────────────────────────────────
 
     @property
     def is_open(self) -> bool:
@@ -123,7 +122,6 @@ class Sidebar:
     def open(self) -> None:
         if self._open:
             return
-        self._cancel_anim()
         self._open = True
         self._build_colours()
         self._apply_colours()
@@ -131,45 +129,32 @@ class Sidebar:
         self._page = "main"
         self._render_page()
 
-        # Re-pack the panel (it was forgotten on close) and animate open
-        self._panel.pack(side=tk.LEFT, fill=tk.Y, before=self.app._content)
-        self._panel.configure(width=0)
-        self._panel.update_idletasks()
-        self._animate_width(0, _SIDEBAR_W)
+        # Show backdrop (dark overlay) then sidebar on top
+        self._backdrop.place(x=0, y=0, relwidth=1, relheight=1)
+        self._backdrop.configure(bg="#000000")
+        # Use winfo to make the backdrop semi-transparent via attributes
+        try:
+            # Simulate dim: just use a low-opacity black frame
+            self._backdrop.configure(bg="#1a1a1a")
+        except Exception:
+            pass
+        self._backdrop.lift()
+        self._panel.place(x=0, y=0, width=_SIDEBAR_W, relheight=1)
+        self._panel.lift()
+
+        # Bind backdrop click to close
+        self._backdrop.bind("<Button-1>", lambda e: self.close())
+        # Bind mousewheel on sidebar canvas
+        self._canvas.bind("<MouseWheel>", self._on_scroll)
 
     def close(self) -> None:
         if not self._open:
             return
-        self._cancel_anim()
         self._open = False
-        current_w = self._panel.winfo_width()
-        self._animate_width(current_w, 0)
-
-    def _cancel_anim(self) -> None:
-        """Cancel any in-flight animation frame."""
-        if self._anim_id is not None:
-            self.app.after_cancel(self._anim_id)
-            self._anim_id = None
-
-    def _animate_width(self, current: int, target: int) -> None:
-        """Smoothly grow or shrink the sidebar panel width."""
-        if current < target:
-            current = min(current + _ANIM_STEP, target)
-        elif current > target:
-            current = max(current - _ANIM_STEP, target)
-
-        self._panel.configure(width=current)
-        self._panel.update_idletasks()
-
-        if current != target:
-            self._anim_id = self.app.after(
-                _ANIM_DELAY, lambda: self._animate_width(current, target))
-        else:
-            self._anim_id = None
-            if target == 0:
-                # Fully remove from layout so it takes zero space
-                self._panel.pack_forget()
-                self._clear_inner()
+        self._panel.place_forget()
+        self._backdrop.place_forget()
+        self._canvas.unbind("<MouseWheel>")
+        self._clear_inner()
 
     # ── Page rendering ──────────────────────────────────────────────────
 
