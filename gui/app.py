@@ -286,6 +286,8 @@ class SymSolverApp(tk.Tk):
                 pass
 
     def _scroll_to_bottom(self) -> None:
+        if getattr(self, '_instant_rendering', False):
+            return  # suppress during instant-mode batch render
         if not self._auto_scroll:
             return
         self._canvas.update_idletasks()
@@ -553,7 +555,10 @@ class SymSolverApp(tk.Tk):
         if not equation:
             return
 
-        self._auto_scroll = True  # re-enable for each new solve
+        # Re-enable auto-scroll only for animated modes;
+        # instant mode should never auto-scroll.
+        if not (self._PHASE_PAUSE == 0 and self._TYPING_SPEED == 0):
+            self._auto_scroll = True
 
         # remove welcome screen
         if hasattr(self, "_welcome_frame") and self._welcome_frame.winfo_exists():
@@ -621,9 +626,13 @@ class SymSolverApp(tk.Tk):
             self._stop_btn.pack_forget()
             self._send_btn.pack(side=tk.RIGHT, padx=(0, 8), pady=6)
         else:
-            # hide solve, show stop
-            self._send_btn.pack_forget()
-            self._stop_btn.pack(side=tk.RIGHT, padx=(0, 8), pady=6)
+            # In instant mode, skip showing stop button (solve is synchronous)
+            if self._PHASE_PAUSE == 0 and self._TYPING_SPEED == 0:
+                self._send_btn.pack_forget()
+            else:
+                # hide solve, show stop
+                self._send_btn.pack_forget()
+                self._stop_btn.pack(side=tk.RIGHT, padx=(0, 8), pady=6)
 
     # ── Chat bubbles ────────────────────────────────────────────────────
 
@@ -634,7 +643,8 @@ class SymSolverApp(tk.Tk):
                  anchor="w").pack(fill=tk.X)
         tk.Label(frame, text=text, font=self._mono, bg=USER_BG, fg=TEXT_BRIGHT,
                  anchor="w").pack(fill=tk.X)
-        self._scroll_to_bottom()
+        if not (self._PHASE_PAUSE == 0 and self._TYPING_SPEED == 0):
+            self._scroll_to_bottom()
 
     def _add_loading(self) -> tk.Label:
         label = tk.Label(
@@ -642,7 +652,8 @@ class SymSolverApp(tk.Tk):
             bg=BG, fg=TEXT_DIM, anchor="w",
         )
         label.pack(fill=tk.X, padx=20, pady=6)
-        self._scroll_to_bottom()
+        if not (self._PHASE_PAUSE == 0 and self._TYPING_SPEED == 0):
+            self._scroll_to_bottom()
         return label
 
     def _show_error(self, message: str, loading: tk.Label) -> None:
@@ -656,7 +667,8 @@ class SymSolverApp(tk.Tk):
                  ).pack(fill=tk.X, pady=(6, 0))
         self._set_input_state(True)
         self._entry.focus_set()
-        self._scroll_to_bottom()
+        if not (self._PHASE_PAUSE == 0 and self._TYPING_SPEED == 0):
+            self._scroll_to_bottom()
 
     # ── Animation helpers ─────────────────────────────────────────────
 
@@ -697,9 +709,11 @@ class SymSolverApp(tk.Tk):
         if bg is None:
             bg = BOT_BG
         if self._PHASE_PAUSE == 0:
-            # Instant mode — create an unmapped dummy so destroy() works
-            lbl = tk.Label(parent)
-            return lbl
+            # Instant mode — return a lightweight dummy with a no-op destroy()
+            class _Dummy:
+                def destroy(self): pass
+                def winfo_exists(self): return False
+            return _Dummy()
         status_font = tkfont.Font(family="Segoe UI", size=12, slant="italic")
         lbl = tk.Label(parent, text=text, font=status_font, bg=bg,
                        fg=TEXT_DIM, anchor="w")
@@ -765,7 +779,7 @@ class SymSolverApp(tk.Tk):
 
         def _render_given():
             status = self._show_status(bot, "Identifying Given...")
-            self.after(self._PHASE_PAUSE, lambda: self._animate_given(
+            self._phase_then(status, lambda: self._animate_given(
                 bot, given, result, status))
 
         queue.append(_render_given)
@@ -775,7 +789,7 @@ class SymSolverApp(tk.Tk):
 
         def _render_method():
             status = self._show_status(bot, "Determining Approach...")
-            self.after(self._PHASE_PAUSE, lambda: self._animate_method(
+            self._phase_then(status, lambda: self._animate_method(
                 bot, method, status))
 
         queue.append(_render_method)
@@ -843,7 +857,9 @@ class SymSolverApp(tk.Tk):
         def _finish():
             self._set_input_state(True)
             self._entry.focus_set()
-            self._scroll_to_bottom()
+            # Don't auto-scroll in instant mode — let user read from top
+            if not (self._PHASE_PAUSE == 0 and self._TYPING_SPEED == 0):
+                self._scroll_to_bottom()
             # Record to history if user is logged in
             self._sidebar.record_solve(_equation_text, _answer_text)
 
@@ -853,7 +869,20 @@ class SymSolverApp(tk.Tk):
         self._anim_queue = queue
         self._anim_idx = 0
         self._steps_header_shown = False
-        self._advance_queue()
+
+        if self._PHASE_PAUSE == 0 and self._TYPING_SPEED == 0:
+            # Instant mode: run entire queue synchronously, no scrolling
+            self._instant_rendering = True
+            while self._anim_idx < len(self._anim_queue):
+                fn = self._anim_queue[self._anim_idx]
+                self._anim_idx += 1
+                fn()
+            self._instant_rendering = False
+            self._auto_scroll = False   # ensure nothing scrolls after render
+            self.update_idletasks()
+            # Do NOT auto-scroll — let user read from the top
+        else:
+            self._advance_queue()
 
     def _advance_queue(self):
         """Run the next item in the animation queue."""
@@ -865,7 +894,10 @@ class SymSolverApp(tk.Tk):
 
     def _schedule_next(self, delay_ms: int = 400):
         """Schedule the next queue item after a short pause.
-        When instant mode, use after(0) to keep UI responsive."""
+        In instant mode the queue is driven by the sync loop in
+        _show_result, so this is a no-op."""
+        if getattr(self, '_instant_rendering', False):
+            return  # sync loop handles advancement
         gen = self._solve_gen
         def _go():
             if self._solve_gen != gen:
@@ -1059,9 +1091,11 @@ class SymSolverApp(tk.Tk):
             if '⟦' in line_text and '⟧' in line_text:
                 self._render_math_expr(parent, line_text, self._small, _bg, _fg)
                 self._scroll_to_bottom()
-                _delay = 0 if self._TYPING_SPEED == 0 else 30
-                self.after(_delay, lambda: self._type_answer_lines(
-                    parent, lines, idx + 1, bg=bg, fg=fg))
+                if self._TYPING_SPEED == 0:
+                    self._type_answer_lines(parent, lines, idx + 1, bg=bg, fg=fg)
+                else:
+                    self.after(30, lambda: self._type_answer_lines(
+                        parent, lines, idx + 1, bg=bg, fg=fg))
             else:
                 self._type_label(parent, line_text, self._small, _bg, _fg,
                                  callback=lambda: self._type_answer_lines(
@@ -1301,8 +1335,10 @@ class SymSolverApp(tk.Tk):
             # Render mathematical expressions with fraction support
             self._render_math_expr(card, text, self._bold, card_bg, color)
             self._scroll_to_bottom()
-            _delay = 0 if self._TYPING_SPEED == 0 else 30
-            self.after(_delay, _next)
+            if self._TYPING_SPEED == 0:
+                _next()
+            else:
+                self.after(30, _next)
         elif kind == "bold":
             self._type_label(card, text, self._bold, card_bg, color, callback=_next)
         elif kind == "small":
