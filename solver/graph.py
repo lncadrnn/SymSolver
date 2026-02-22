@@ -550,7 +550,11 @@ def _build_single_var(inputs, final):
     try:
         f_lhs = lambdify(x, lhs, modules="numpy")
         f_rhs = lambdify(x, rhs, modules="numpy")
-        y_lhs = np.array(f_lhs(x_range), dtype=float)
+        _lhs_raw = f_lhs(x_range)
+        if np.ndim(_lhs_raw) == 0:
+            y_lhs = np.full_like(x_range, float(_lhs_raw), dtype=float)
+        else:
+            y_lhs = np.array(_lhs_raw, dtype=float)
         _rhs_raw = f_rhs(x_range)
         if np.ndim(_rhs_raw) == 0:
             y_rhs = np.full_like(x_range, float(_rhs_raw), dtype=float)
