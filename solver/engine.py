@@ -111,6 +111,54 @@ def _frac(num, den) -> str:
     return f"{_FRAC_OPEN}{num}{_FRAC_SEP}{den}{_FRAC_CLOSE}"
 
 
+# Superscript characters used in exponents — must NOT be treated as operators.
+_SUP_CHARS = (
+    "\u00b2\u00b3\u00b9"                          # ²³¹
+    "\u2070\u2074\u2075\u2076\u2077\u2078\u2079"  # ⁰⁴⁵⁶⁷⁸⁹
+    "\u207a\u207b\u207c"                           # ⁺⁻⁼ (inside exponents)
+)
+# Characters after which a '-' is BINARY (needs spaces around it).
+_BINARY_AFTER = r'[0-9A-Za-z' + re.escape(_SUP_CHARS) + r'·\u27e7)]'
+
+
+def _normalize_spacing(s: str) -> str:
+    """Ensure exactly one space around binary +, -, and = operators.
+
+    Fraction markers ⟦num|den⟧ are treated as opaque atoms — their
+    internal text is never touched.  Rules applied to every plain segment:
+
+    - '=' is always binary  →  ' = '
+    - '+' is always binary  →  ' + '
+    - '-' is binary only when preceded by a digit, letter, closing paren,
+      superscript char, or the ⟧ end-marker of a fraction.
+      Unary '-' at the start of an expression or after '(' is left alone.
+    - Multiple spaces collapsed to one.
+    """
+    # Split on fraction markers keeping them as separate tokens.
+    segments = re.split(r'(\u27e6[^\u27e7]*\u27e7)', s)
+    out = []
+    for seg in segments:
+        if seg.startswith(_FRAC_OPEN):
+            out.append(seg)
+            continue
+        seg = re.sub(r'\s*=\s*', ' = ', seg)
+        seg = re.sub(r'\s*\+\s*', ' + ', seg)
+        # Binary '-': preceded by a term character.
+        seg = re.sub(r'(' + _BINARY_AFTER + r')\s*-\s*', r'\1 - ', seg)
+        seg = re.sub(r'  +', ' ', seg)
+        out.append(seg)
+    joined = ''.join(out)
+    # Handle binary '-' that spans the ⟧ / next-segment boundary.
+    joined = re.sub(r'(\u27e7)\s*-\s*', r'\1 - ', joined)
+    # Ensure a space before ⟦ when a term immediately precedes it.
+    joined = re.sub(
+        r'([0-9A-Za-z\u00b2\u00b3\u00b9\u2070\u2074-\u2079\u207a-\u207c\u00b7\u27e7)])(\u27e6)',
+        r'\1 \2', joined)
+    # Ensure a space after ⟧ when a term immediately follows it.
+    joined = re.sub(r'(\u27e7)([0-9A-Za-z])', r'\1 \2', joined)
+    return re.sub(r'  +', ' ', joined)
+
+
 def _format_expr(expr) -> str:
     """Format a SymPy expression into a readable string with Unicode
     superscript exponents and stacked-fraction markers."""
@@ -152,7 +200,7 @@ def _format_expr(expr) -> str:
         return _frac(m.group(1), m.group(2))
     s = re.sub(r'(-?[0-9]+)/([A-Za-z][A-Za-z0-9]*)', _var_frac_repl, s)
 
-    return s
+    return _normalize_spacing(s)
 
 
 def _format_expr_plain(expr) -> str:
@@ -169,7 +217,7 @@ def _format_expr_plain(expr) -> str:
     s = re.sub(r'(\d)\*([A-Za-z])', r'\1\2', s)
     s = re.sub(r'\)\*([A-Za-z])', r')\1', s)
     s = s.replace('*', '·')
-    return s
+    return _normalize_spacing(s)
 
 
 def _format_input_str(raw: str) -> str:
@@ -205,7 +253,7 @@ def _format_input_str(raw: str) -> str:
     def _frac_repl(m):
         return _frac(m.group(1), m.group(2))
     s = re.sub(r'(-?[A-Za-z0-9·]+)/([A-Za-z0-9·]+)', _frac_repl, s)
-    return s
+    return _normalize_spacing(s)
 
 
 def _format_input_eq(lhs_raw: str, rhs_raw: str) -> str:
@@ -653,14 +701,16 @@ def solve_linear_equation(equation_str: str) -> dict:
     original_lhs_str = equation_str.split('=')[0].strip()
     original_rhs_str = equation_str.split('=')[1].strip()
 
-    # Step 0: Original equation — formatted so fractions and exponents display correctly
-    _fmt_orig_lhs = _format_expr(lhs)
-    _fmt_orig_rhs = _format_expr(rhs)
-    _fmt_orig_eq  = _format_equation(lhs, rhs)
+    # Step 0: Original equation — show EXACTLY what the user typed.
+    # _format_input_str applies only visual fixes (superscripts, fraction
+    # markers, spacing) without SymPy reordering / combining / expanding.
+    _fmt_input_lhs = _format_input_str(original_lhs_str)
+    _fmt_input_rhs = _format_input_str(original_rhs_str)
+    _fmt_input_eq  = _format_input_eq(original_lhs_str, original_rhs_str)
     steps.append({
         "description": "Starting with the original equation",
-        "expression": _fmt_orig_eq,
-        "explanation": f"We are given the equation {_format_expr_plain(lhs)} = {_format_expr_plain(rhs)}. Our goal is to isolate {var_name} on one side to find its value.",
+        "expression": _fmt_input_eq,
+        "explanation": f"We are given the equation {original_lhs_str} = {original_rhs_str}. Our goal is to isolate {var_name} on one side to find its value.",
     })
 
     # --- Step: Combine like terms / Expand (if parsing auto-simplified) ---
@@ -700,20 +750,25 @@ def solve_linear_equation(equation_str: str) -> dict:
         _lhs_changed = _lhs_term_changed or ('(' in original_lhs_str and '(' not in _format_expr(lhs))
         _rhs_changed = _rhs_term_changed or ('(' in original_rhs_str and '(' not in _format_expr(rhs))
         if _lhs_changed:
-            action = "expands to" if '(' in original_lhs_str else "simplifies to"
+            action = "expands and combines to" if '(' in original_lhs_str else "combines to"
             parts.append(
                 f"On the left side, {original_lhs_str} {action} "
                 f"{_format_expr_plain(lhs)}"
             )
         if _rhs_changed:
-            action = "expands to" if '(' in original_rhs_str else "simplifies to"
+            action = "expands and combines to" if '(' in original_rhs_str else "combines to"
             parts.append(
                 f"On the right side, {original_rhs_str} {action} "
                 f"{_format_expr_plain(rhs)}"
             )
+        # Show: what the user typed  →  what it simplified to
+        _combine_expr = (
+            f"{_fmt_input_lhs} = {_fmt_input_rhs}"
+            f"  \u2192  {_format_equation(lhs, rhs)}"
+        )
         steps.append({
             "description": desc,
-            "expression": _format_equation(lhs, rhs),
+            "expression": _combine_expr,
             "explanation": ". ".join(parts) + ".",
         })
 
@@ -877,11 +932,11 @@ def solve_linear_equation(equation_str: str) -> dict:
         runtime_ms = round((t_end - t_start) * 1000, 2)
 
         given = {
-            "problem": f"Solve the linear equation: {_fmt_orig_eq}",
+            "problem": f"Solve the linear equation: {_fmt_input_eq}",
             "inputs": {
-                "equation":   _fmt_orig_eq,
-                "left_side":  _fmt_orig_lhs,
-                "right_side": _fmt_orig_rhs,
+                "equation":   _fmt_input_eq,
+                "left_side":  _fmt_input_lhs,
+                "right_side": _fmt_input_rhs,
                 "variable":   var_name,
             },
         }
@@ -1004,11 +1059,11 @@ def solve_linear_equation(equation_str: str) -> dict:
     runtime_ms = round((t_end - t_start) * 1000, 2)
 
     given = {
-        "problem": f"Solve the linear equation: {_fmt_orig_eq}",
+        "problem": f"Solve the linear equation: {_fmt_input_eq}",
         "inputs": {
-            "equation":   _fmt_orig_eq,
-            "left_side":  _fmt_orig_lhs,
-            "right_side": _fmt_orig_rhs,
+            "equation":   _fmt_input_eq,
+            "left_side":  _fmt_input_lhs,
+            "right_side": _fmt_input_rhs,
             "variable":   var_name,
         },
     }
