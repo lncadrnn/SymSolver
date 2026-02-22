@@ -1455,11 +1455,11 @@ class SymSolverApp(tk.Tk):
         copy_btn.pack(side=tk.LEFT, padx=(0, 8))
 
         save_btn = tk.Button(
-            bar, text="📄 Save as File", font=btn_font,
+            bar, text="📄 Save as PDF", font=btn_font,
             bg=p["STEP_BG"], fg=p["TEXT_BRIGHT"],
             activebackground=p["ACCENT"], activeforeground="#ffffff",
             bd=0, padx=14, pady=6, cursor="hand2", relief=tk.FLAT,
-            command=lambda: self._save_as_file(result),
+            command=lambda: self._save_as_pdf(result),
         )
         save_btn.pack(side=tk.LEFT)
 
@@ -1473,21 +1473,196 @@ class SymSolverApp(tk.Tk):
         btn.configure(text="✓ Copied!")
         self.after(1500, lambda: btn.configure(text=original))
 
-    def _save_as_file(self, result: dict) -> None:
-        """Save the full solution trail to a .txt file chosen by the user."""
-        text = self._build_plain_text(result)
+    def _safe_filename(self, equation: str) -> str:
+        safe = re.sub(r'[<>:"/\\|?*]', '', equation)[:50].strip()
+        return re.sub(r'\s+', '', safe)
+
+    def _save_as_pdf(self, result: dict) -> None:
+        """Export the full solution trail as a styled PDF with graph & analysis."""
         eq = result.get("equation", "equation").strip()
-        # Build a safe default filename
-        safe = re.sub(r'[^\w\s\-=]', '', eq)[:40].strip().replace(' ', '_')
+        safe = self._safe_filename(eq)
         path = filedialog.asksaveasfilename(
-            title="Save Solution Trail",
-            defaultextension=".txt",
+            title="Save Solution as PDF",
+            defaultextension=".pdf",
             initialfile=f"SymSolver_{safe}",
-            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+            filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")],
         )
-        if path:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(text)
+        if not path:
+            return
+
+        import tempfile
+        try:
+            from fpdf import FPDF
+        except ImportError:
+            from tkinter import messagebox
+            messagebox.showerror("Missing dependency",
+                                 "PDF export requires 'fpdf2'.\n\n"
+                                 "Install it with:  pip install fpdf2")
+            return
+
+        # ── Set up PDF ──────────────────────────────────────────────
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=20)
+        pdf.add_page()
+
+        # Register Unicode fonts
+        fonts_dir = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+        try:
+            pdf.add_font("Arial", "", os.path.join(fonts_dir, "arial.ttf"))
+            pdf.add_font("Arial", "B", os.path.join(fonts_dir, "arialbd.ttf"))
+            pdf.add_font("Consolas", "", os.path.join(fonts_dir, "consola.ttf"))
+            _font = "Arial"
+            _mono = "Consolas"
+        except Exception:
+            _font = "Helvetica"
+            _mono = "Courier"
+
+        frac = self._frac_to_plain
+
+        # ── Title ───────────────────────────────────────────────────
+        pdf.set_font(_font, "B", 20)
+        pdf.set_text_color(26, 140, 255)
+        pdf.cell(0, 12, "SymSolver - Solution Trail", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_draw_color(26, 140, 255)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(6)
+
+        def _section(title: str) -> None:
+            pdf.ln(4)
+            pdf.set_font(_font, "B", 13)
+            pdf.set_text_color(26, 140, 255)
+            pdf.cell(0, 8, title, new_x="LMARGIN", new_y="NEXT")
+            pdf.set_draw_color(26, 140, 255)
+            pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+            pdf.ln(3)
+
+        def _label_value(label: str, value: str) -> None:
+            pdf.set_font(_font, "B", 10)
+            pdf.set_text_color(80, 80, 80)
+            pdf.cell(40, 6, f"{label}:", new_x="END")
+            pdf.set_font(_mono, "", 10)
+            pdf.set_text_color(30, 30, 30)
+            pdf.multi_cell(0, 6, f"  {frac(value)}", new_x="LMARGIN", new_y="NEXT")
+
+        def _body(text: str, bold: bool = False, size: int = 10) -> None:
+            pdf.set_font(_font, "B" if bold else "", size)
+            pdf.set_text_color(30, 30, 30)
+            pdf.multi_cell(0, 6, frac(text), new_x="LMARGIN", new_y="NEXT")
+
+        def _mono_text(text: str, size: int = 10) -> None:
+            pdf.set_font(_mono, "", size)
+            pdf.set_text_color(30, 30, 30)
+            pdf.multi_cell(0, 6, frac(text), new_x="LMARGIN", new_y="NEXT")
+
+        # ── GIVEN ───────────────────────────────────────────────────
+        given = result.get("given", {})
+        _section("GIVEN")
+        if given.get("problem"):
+            _body(frac(given["problem"]), bold=True)
+        for key, val in given.get("inputs", {}).items():
+            _label_value(key.replace("_", " ").title(), val)
+
+        # ── METHOD ──────────────────────────────────────────────────
+        method = result.get("method", {})
+        _section("METHOD")
+        if method.get("name"):
+            _body(method["name"], bold=True, size=12)
+        if method.get("description"):
+            _body(method["description"])
+        for key, val in method.get("parameters", {}).items():
+            _label_value(key.replace("_", " ").title(), val)
+
+        # ── STEPS ───────────────────────────────────────────────────
+        _section("STEPS")
+        for step in result.get("steps", []):
+            num = step.get("step_number", "?")
+            pdf.ln(2)
+            _body(f"Step {num}: {frac(step.get('description', ''))}", bold=True)
+            if step.get("expression"):
+                _mono_text(f"    {frac(step['expression'])}")
+            if step.get("explanation"):
+                pdf.set_font(_font, "", 9)
+                pdf.set_text_color(100, 100, 100)
+                pdf.multi_cell(0, 5, f"    {frac(step['explanation'])}", new_x="LMARGIN", new_y="NEXT")
+
+        # ── FINAL ANSWER ────────────────────────────────────────────
+        _section("FINAL ANSWER")
+        pdf.set_font(_mono, "", 14)
+        pdf.set_text_color(76, 175, 80)
+        pdf.cell(0, 10, frac(result.get("final_answer", "?")), new_x="LMARGIN", new_y="NEXT")
+
+        # ── VERIFICATION ────────────────────────────────────────────
+        v_steps = result.get("verification_steps", [])
+        if v_steps:
+            _section("VERIFICATION")
+            for step in v_steps:
+                num = step.get("step_number", "?")
+                pdf.ln(2)
+                _body(f"Step {num}: {frac(step.get('description', ''))}", bold=True)
+                if step.get("expression"):
+                    _mono_text(f"    {frac(step['expression'])}")
+                if step.get("explanation"):
+                    pdf.set_font(_font, "", 9)
+                    pdf.set_text_color(100, 100, 100)
+                    pdf.multi_cell(0, 5, f"    {frac(step['explanation'])}", new_x="LMARGIN", new_y="NEXT")
+
+        # ── GRAPH & ANALYSIS ────────────────────────────────────────
+        graph_img_path = None
+        try:
+            from solver.graph import build_figure, analyze_result
+            fig = build_figure(result)
+            if fig is not None:
+                tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+                fig.savefig(tmp.name, dpi=150, bbox_inches="tight",
+                            facecolor="#ffffff", edgecolor="none")
+                tmp.close()
+                graph_img_path = tmp.name
+
+                _section("GRAPH")
+                img_w = pdf.w - 20  # full width minus margins
+                pdf.image(graph_img_path, x=10, w=img_w)
+                pdf.ln(4)
+
+            analysis = analyze_result(result)
+            if analysis:
+                _section("ANALYSIS")
+                _body(analysis.get("case_label", ""), bold=True, size=12)
+                pdf.ln(1)
+                _body(f"General form: {analysis.get('form', '')}")
+                pdf.ln(1)
+                _body(analysis.get("description", ""))
+                if analysis.get("detail"):
+                    _body(f"Condition: {analysis['detail']}")
+                if analysis.get("solution"):
+                    pdf.ln(2)
+                    pdf.set_font(_mono, "", 12)
+                    pdf.set_text_color(76, 175, 80)
+                    pdf.cell(0, 8, f"Result: {frac(analysis['solution'])}", new_x="LMARGIN", new_y="NEXT")
+        except Exception:
+            pass
+
+        # ── SUMMARY ─────────────────────────────────────────────────
+        summary = result.get("summary", {})
+        if summary:
+            _section("SUMMARY")
+            _label_value("Runtime", f"{summary.get('runtime_ms', '?')} ms")
+            _label_value("Steps", str(summary.get('total_steps', '?')))
+            _label_value("Verification Steps", str(summary.get('verification_steps', '?')))
+            _label_value("Timestamp", summary.get('timestamp', '?'))
+            _label_value("Library", summary.get('library', '?'))
+
+        # ── Write ───────────────────────────────────────────────────
+        try:
+            pdf.output(path)
+        except Exception as exc:
+            from tkinter import messagebox
+            messagebox.showerror("Export error", f"Could not save PDF:\n{exc}")
+        finally:
+            if graph_img_path:
+                try:
+                    os.remove(graph_img_path)
+                except OSError:
+                    pass
 
     # ── Section header helpers ──────────────────────────────────────────
 
