@@ -125,6 +125,17 @@ _SUP_CHARS = (
 _BINARY_AFTER = r'[0-9A-Za-z' + re.escape(_SUP_CHARS) + r'·\u27e7)]'
 
 
+def _prettify_symbols(s: str) -> str:
+    """Replace solver-internal names with display-friendly Unicode symbols.
+
+    - ``pi``  (whole word) → ``π``
+    - ``sqrt(`` → ``√(``
+    """
+    s = re.sub(r'\bpi\b', 'π', s)
+    s = s.replace('sqrt(', '√(')
+    return s
+
+
 def _normalize_spacing(s: str) -> str:
     """Ensure exactly one space around binary +, -, and = operators.
 
@@ -204,7 +215,7 @@ def _format_expr(expr) -> str:
         return _frac(m.group(1), m.group(2))
     s = re.sub(r'(-?[0-9]+)/([A-Za-z][A-Za-z0-9]*)', _var_frac_repl, s)
 
-    return _normalize_spacing(s)
+    return _prettify_symbols(_normalize_spacing(s))
 
 
 def _format_expr_plain(expr) -> str:
@@ -221,7 +232,7 @@ def _format_expr_plain(expr) -> str:
     s = re.sub(r'(\d)\*([A-Za-z])', r'\1\2', s)
     s = re.sub(r'\)\*([A-Za-z])', r')\1', s)
     s = s.replace('*', '·')
-    return _normalize_spacing(s)
+    return _prettify_symbols(_normalize_spacing(s))
 
 
 def _format_input_str(raw: str) -> str:
@@ -257,7 +268,7 @@ def _format_input_str(raw: str) -> str:
     def _frac_repl(m):
         return _frac(m.group(1), m.group(2))
     s = re.sub(r'(-?[A-Za-z0-9·]+)/([A-Za-z0-9·]+)', _frac_repl, s)
-    return _normalize_spacing(s)
+    return _prettify_symbols(_normalize_spacing(s))
 
 
 def _format_input_eq(lhs_raw: str, rhs_raw: str) -> str:
@@ -609,7 +620,7 @@ def _validate_characters(equation_str: str) -> None:
     allowed = set("abcdefghijklmnopqrstuvwxyz"
                   "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
                   "0123456789"
-                  " \t+-*/^=().,:;")
+                  " \t+-*/^=()[]{}.,;:\u03c0\u221a")
     bad = set()
     for ch in equation_str:
         if ch not in allowed:
@@ -636,6 +647,10 @@ def solve_linear_equation(equation_str: str) -> dict:
       - given, method, steps, final_answer, verification_steps, summary
     """
     t_start = time.perf_counter()
+
+    # ── Normalise Unicode symbols to parser-friendly equivalents ─────
+    equation_str = equation_str.replace('\u221a', 'sqrt')
+    equation_str = equation_str.replace('\u03c0', '(pi)')
 
     # ── Validate input characters ───────────────────────────────────────
     _validate_characters(equation_str)

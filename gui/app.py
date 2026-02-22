@@ -234,23 +234,148 @@ class SymSolverApp(tk.Tk):
         self._entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(14, 6), pady=10)
         self._entry.focus_set()
 
+        # Solve button — packed first so it lands at the farthest right
+        self._action_frame = tk.Frame(self._input_inner, bg=INPUT_BG)
+        self._action_frame.pack(side=tk.RIGHT, padx=(0, 8), pady=6)
+        self._action_frame.pack_propagate(False)
+        # Set a fixed size after the Solve button renders
+        self.after(50, self._lock_action_frame_size)
+
         self._send_btn = tk.Button(
-            self._input_inner, text="Solve ➤", font=self._bold,
+            self._action_frame, text="Solve ➤", font=self._bold,
             bg=ACCENT, fg=TEXT_BRIGHT, activebackground=ACCENT_HOVER,
             activeforeground=TEXT_BRIGHT, bd=0, padx=18, pady=6,
             cursor="hand2", command=self._on_send,
         )
-        self._send_btn.pack(side=tk.RIGHT, padx=(0, 8), pady=6)
+        self._send_btn.pack(fill=tk.BOTH, expand=True)
 
         # Stop button — shown only during solving/animation
         self._stop_btn = tk.Button(
-            self._input_inner, text="⏹", font=self._bold,
+            self._action_frame, text="⏹", font=self._bold,
             bg="#3a1a1a", fg="#ff6b6b", activebackground="#4a2020",
-            activeforeground="#ff9999", bd=0, padx=14, pady=6,
+            activeforeground="#ff9999", bd=0, padx=18, pady=6,
             cursor="hand2", relief=tk.FLAT,
             command=self._stop_solving,
         )
         # not packed yet — shown on demand
+
+        # ── Symbol-pad toggle button (keyboard icon) ────────────────
+        self._sympad_font = tkfont.Font(family="Segoe UI", size=16)
+        self._sympad_btn = tk.Button(
+            self._input_inner, text="\u2328", font=self._sympad_font,
+            bg=INPUT_BG, fg=TEXT_DIM, activebackground=INPUT_BG,
+            activeforeground=TEXT_BRIGHT, bd=0, padx=8, pady=4,
+            cursor="hand2", relief=tk.FLAT,
+            command=self._toggle_symbol_pad,
+        )
+        self._sympad_btn.pack(side=tk.RIGHT, padx=(0, 2), pady=6)
+        self._symbol_pad_win: tk.Toplevel | None = None
+
+    def _lock_action_frame_size(self) -> None:
+        """Freeze the action frame to the Solve button's rendered size."""
+        self._action_frame.update_idletasks()
+        w = self._send_btn.winfo_reqwidth()
+        h = self._send_btn.winfo_reqheight()
+        self._action_frame.configure(width=w, height=h)
+
+    # ── Symbol pad ──────────────────────────────────────────────────────
+
+    _SYMBOL_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
+        ("Trig / Functions", [
+            ("sin()",  "sin("),
+            ("cos()",  "cos("),
+            ("tan()",  "tan("),
+            ("log()",  "log("),
+            ("ln()",   "ln("),
+            ("√",      "√("),
+        ]),
+        ("Constants / Ops", [
+            ("π",      "π"),
+            ("^",      "^"),
+            ("/",      "/"),
+            ("·",      "*"),
+            ("+",      "+"),
+            ("−",      "-"),
+        ]),
+        ("Brackets", [
+            ("( )",    "("),
+            ("[ ]",    "["),
+            ("{ }",    "{"),
+            (")",      ")"),
+            ("]",      "]"),
+            ("}",      "}"),
+        ]),
+        ("Symbols", [
+            ("=",      "="),
+        ]),
+    ]
+
+    def _toggle_symbol_pad(self) -> None:
+        """Show or hide the floating symbol pad above the input bar."""
+        if self._symbol_pad_win and self._symbol_pad_win.winfo_exists():
+            self._symbol_pad_win.destroy()
+            self._symbol_pad_win = None
+            return
+        self._show_symbol_pad()
+
+    def _show_symbol_pad(self) -> None:
+        p = _DARK_PALETTE if self._theme == "dark" else _LIGHT_PALETTE
+        pad = tk.Toplevel(self)
+        pad.overrideredirect(True)
+        pad.configure(bg=p["STEP_BORDER"])
+        pad.attributes("-topmost", True)
+        self._symbol_pad_win = pad
+
+        inner = tk.Frame(pad, bg=p["BG_DARKER"], padx=10, pady=8)
+        inner.pack(padx=1, pady=1)  # 1px border via outer bg
+
+        btn_font = tkfont.Font(family="Consolas", size=13)
+        lbl_font = tkfont.Font(family="Segoe UI", size=10, weight="bold")
+
+        for group_name, symbols in self._SYMBOL_GROUPS:
+            tk.Label(inner, text=group_name, font=lbl_font,
+                     bg=p["BG_DARKER"], fg=p["TEXT_DIM"],
+                     anchor="w").pack(fill=tk.X, pady=(6, 2))
+            row = tk.Frame(inner, bg=p["BG_DARKER"])
+            row.pack(fill=tk.X)
+            for display, insert_text in symbols:
+                b = tk.Button(
+                    row, text=display, font=btn_font, width=5,
+                    bg=p["STEP_BG"], fg=p["TEXT_BRIGHT"],
+                    activebackground=p["ACCENT"], activeforeground="#ffffff",
+                    bd=0, padx=4, pady=4, cursor="hand2", relief=tk.FLAT,
+                    command=lambda t=insert_text: self._insert_symbol(t),
+                )
+                b.pack(side=tk.LEFT, padx=2, pady=2)
+
+        # Position above the keyboard button
+        self.update_idletasks()
+        bx = self._sympad_btn.winfo_rootx()
+        by = self._sympad_btn.winfo_rooty()
+        pw = pad.winfo_reqwidth()
+        ph = pad.winfo_reqheight()
+        # Align right edge with button right, above the button
+        x = bx + self._sympad_btn.winfo_width() - pw
+        y = by - ph - 4
+        # Keep on-screen
+        if x < 0:
+            x = bx
+        pad.geometry(f"+{x}+{y}")
+
+        # Close when clicking elsewhere
+        pad.bind("<FocusOut>", lambda _: self._close_symbol_pad())
+        pad.focus_set()
+
+    def _close_symbol_pad(self) -> None:
+        if self._symbol_pad_win and self._symbol_pad_win.winfo_exists():
+            self._symbol_pad_win.destroy()
+        self._symbol_pad_win = None
+
+    def _insert_symbol(self, text: str) -> None:
+        """Insert *text* into the equation entry at the current cursor position."""
+        pos = self._entry.index(tk.INSERT)
+        self._entry.insert(pos, text)
+        self._entry.focus_set()
 
     # ── Canvas helpers ──────────────────────────────────────────────────
 
@@ -394,12 +519,19 @@ class SymSolverApp(tk.Tk):
         self._input_bar.configure(bg=p["BG_DARKER"])
         self._input_inner.configure(bg=p["INPUT_BG"],
                                     highlightbackground=p["INPUT_BORDER"])
+        self._action_frame.configure(bg=p["INPUT_BG"])
         self._entry.configure(bg=p["INPUT_BG"], fg=p["TEXT_BRIGHT"],
                               insertbackground=p["TEXT_BRIGHT"],
                               disabledbackground=p["INPUT_BG"])
         self._send_btn.configure(bg=p["ACCENT"], fg="#ffffff",
                                  activebackground=p["ACCENT_HOVER"],
                                  activeforeground="#ffffff")
+        self._sympad_btn.configure(bg=p["INPUT_BG"], fg=p["TEXT_DIM"],
+                                   activebackground=p["INPUT_BG"],
+                                   activeforeground=p["TEXT_BRIGHT"])
+        # Close & re-open symbol pad so it picks up new colours
+        if self._symbol_pad_win and self._symbol_pad_win.winfo_exists():
+            self._close_symbol_pad()
         # scrollbar
         self._update_scrollbar_style()
         # graph palette
@@ -624,7 +756,7 @@ class SymSolverApp(tk.Tk):
         if enabled:
             # hide stop, show solve
             self._stop_btn.pack_forget()
-            self._send_btn.pack(side=tk.RIGHT, padx=(0, 8), pady=6)
+            self._send_btn.pack(fill=tk.BOTH, expand=True)
         else:
             # In instant mode, skip showing stop button (solve is synchronous)
             if self._PHASE_PAUSE == 0 and self._TYPING_SPEED == 0:
@@ -632,7 +764,7 @@ class SymSolverApp(tk.Tk):
             else:
                 # hide solve, show stop
                 self._send_btn.pack_forget()
-                self._stop_btn.pack(side=tk.RIGHT, padx=(0, 8), pady=6)
+                self._stop_btn.pack(fill=tk.BOTH, expand=True)
 
     # ── Chat bubbles ────────────────────────────────────────────────────
 
