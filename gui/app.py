@@ -12,6 +12,7 @@ from tkinter import ttk, font as tkfont
 import threading
 
 from solver import solve_linear_equation
+from gui.sidebar import Sidebar
 
 
 # ── colour palette ─────────────────────────────────────────────────────────
@@ -121,20 +122,38 @@ class SymSolverApp(tk.Tk):
         self._logo_photo = None          # Hold reference to prevent GC
 
         self._build_ui()
+        self._sidebar = Sidebar(self)
         self._show_welcome()
 
         # bind Enter
         self.bind("<Return>", lambda _: self._on_send())
+        # Escape closes sidebar
+        self.bind("<Escape>", lambda _: self._sidebar.close())
 
     # ── UI construction ─────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
+        # ── Main content wrapper (shifts when sidebar opens) ─────────
+        self._content = tk.Frame(self, bg=BG)
+        self._content.pack(fill=tk.BOTH, expand=True)
+
         # header
-        self._header = tk.Frame(self, bg=HEADER_BG, height=72)
+        self._header = tk.Frame(self._content, bg=HEADER_BG, height=72)
         self._header.pack(fill=tk.X)
         self._header.pack_propagate(False)
+        # hamburger menu button
+        self._hamburger_font = tkfont.Font(family="Segoe UI", size=20)
+        self._hamburger_btn = tk.Button(
+            self._header, text="☰", font=self._hamburger_font,
+            bg=HEADER_BG, fg=TEXT_DIM, activebackground=HEADER_BG,
+            activeforeground=TEXT_BRIGHT, bd=0, padx=10, pady=0,
+            cursor="hand2", relief=tk.FLAT,
+            command=self._toggle_sidebar,
+        )
+        self._hamburger_btn.pack(side=tk.LEFT, padx=(14, 0))
+
         self._header_logo = self._load_header_logo()
-        self._header_logo.pack(side=tk.LEFT, padx=20)
+        self._header_logo.pack(side=tk.LEFT, padx=(8, 20))
 
         # new chat button
         self._small_bold = tkfont.Font(family="Segoe UI", size=12, weight="bold")
@@ -158,7 +177,7 @@ class SymSolverApp(tk.Tk):
         self._theme_btn.pack(side=tk.RIGHT, padx=(0, 8))
 
         # chat area (canvas + scrollbar for widget embedding)
-        self._chat_wrapper = tk.Frame(self, bg=BG)
+        self._chat_wrapper = tk.Frame(self._content, bg=BG)
         self._chat_wrapper.pack(fill=tk.BOTH, expand=True)
 
         # Custom scrollbar style
@@ -192,7 +211,7 @@ class SymSolverApp(tk.Tk):
         self._canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         # input bar
-        self._input_bar = tk.Frame(self, bg=BG_DARKER, pady=14)
+        self._input_bar = tk.Frame(self._content, bg=BG_DARKER, pady=14)
         self._input_bar.pack(fill=tk.X, side=tk.BOTTOM)
 
         self._input_inner = tk.Frame(self._input_bar, bg=INPUT_BG,
@@ -319,12 +338,17 @@ class SymSolverApp(tk.Tk):
             pass
         self._header_logo = self._load_header_logo()
         self._header_logo.configure(bg=p["HEADER_BG"])
-        self._header_logo.pack(side=tk.LEFT, padx=20)
+        self._header_logo.pack(side=tk.LEFT, padx=(8, 20))
+
+    def _toggle_sidebar(self) -> None:
+        """Open / close the sidebar."""
+        self._sidebar.toggle()
 
     def _toggle_theme(self) -> None:
         self._theme = "light" if self._theme == "dark" else "dark"
         self._refresh_header_logo()
         self._apply_theme()
+        self._sidebar.refresh_theme()
 
     def _apply_theme(self) -> None:
         """Update global colour variables and re-style all static widgets."""
@@ -339,6 +363,9 @@ class SymSolverApp(tk.Tk):
         # header
         self._header.configure(bg=p["HEADER_BG"])
         self._header_logo.configure(bg=p["HEADER_BG"])
+        self._hamburger_btn.configure(bg=p["HEADER_BG"], fg=p["TEXT_DIM"],
+                                      activebackground=p["HEADER_BG"],
+                                      activeforeground=p["TEXT_BRIGHT"])
         self._new_btn.configure(bg=p["ACCENT"], fg="#ffffff",
                                 activebackground=p["ACCENT_HOVER"],
                                 activeforeground="#ffffff")
@@ -350,6 +377,7 @@ class SymSolverApp(tk.Tk):
         )
         # canvas / chat area
         self.configure(bg=p["BG"])
+        self._content.configure(bg=p["BG"])
         self._chat_wrapper.configure(bg=p["BG"])
         self._canvas.configure(bg=p["BG"])
         self._chat_frame.configure(bg=p["BG"])
@@ -767,11 +795,16 @@ class SymSolverApp(tk.Tk):
 
             queue.append(_render_summary)
 
-        # Final: re-enable input
+        # Final: re-enable input + record history
+        _equation_text = result.get("equation", "")
+        _answer_text = result.get("final_answer", "")
+
         def _finish():
             self._set_input_state(True)
             self._entry.focus_set()
             self._scroll_to_bottom()
+            # Record to history if user is logged in
+            self._sidebar.record_solve(_equation_text, _answer_text)
 
         queue.append(_finish)
 
