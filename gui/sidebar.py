@@ -131,13 +131,8 @@ class Sidebar:
 
         # Show backdrop (dark overlay) then sidebar on top
         self._backdrop.place(x=0, y=0, relwidth=1, relheight=1)
-        self._backdrop.configure(bg="#000000")
-        # Use winfo to make the backdrop semi-transparent via attributes
-        try:
-            # Simulate dim: just use a low-opacity black frame
-            self._backdrop.configure(bg="#1a1a1a")
-        except Exception:
-            pass
+        _dim = "#b0b4ba" if self.app._theme == "light" else "#1a1a1a"
+        self._backdrop.configure(bg=_dim)
         self._backdrop.lift()
         self._panel.place(x=0, y=0, width=_SIDEBAR_W, relheight=1)
         self._panel.lift()
