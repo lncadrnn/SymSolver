@@ -231,6 +231,7 @@ class Sidebar:
         if self._current_user:
             self._make_menu_button(menu, "📋  History", lambda: self._go_page("history"))
 
+        self._make_menu_button(menu, "💬  Chat", self._go_chat)
         self._make_menu_button(menu, "⚙  Settings", self._open_settings)
 
         # Divider + version
@@ -494,6 +495,12 @@ class Sidebar:
                   command=lambda: self._go_page("history")).pack(side=tk.LEFT)
 
     # ── Settings page — now opens as full page in the app ─────────────
+
+    def _go_chat(self) -> None:
+        """Close sidebar (and settings if open) to return to the chat view."""
+        self.close()
+        if getattr(self.app, '_settings_visible', False):
+            self.app.close_settings_page()
 
     def _open_settings(self) -> None:
         """Close sidebar and open the full-page settings view."""

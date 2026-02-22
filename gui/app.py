@@ -1572,14 +1572,20 @@ class SymSolverApp(tk.Tk):
         theme_frame.pack(fill=tk.X, pady=(0, 6))
 
         for val, label_text in [("dark", "🌙  Dark Mode"), ("light", "☀  Light Mode")]:
+            rb_border = tk.Frame(theme_frame, bg=p["INPUT_BORDER"],
+                                 highlightbackground=p["INPUT_BORDER"],
+                                 highlightthickness=1, bd=0)
+            rb_border.pack(fill=tk.X, pady=3)
+            rb_inner = tk.Frame(rb_border, bg=p["STEP_BG"], padx=8, pady=5)
+            rb_inner.pack(fill=tk.X)
             rb = tk.Radiobutton(
-                theme_frame, text=label_text, variable=theme_var, value=val,
+                rb_inner, text=label_text, variable=theme_var, value=val,
                 font=label_font, bg=p["STEP_BG"], fg=p["TEXT_BRIGHT"],
                 selectcolor=p["BG"], activebackground=p["STEP_BG"],
                 activeforeground=p["ACCENT"],
                 highlightthickness=0, bd=0, cursor="hand2",
             )
-            rb.pack(anchor="w", pady=2)
+            rb.pack(anchor="w")
 
         # Divider
         tk.Frame(card, bg=p["TEXT_DIM"], height=1).pack(fill=tk.X, pady=(12, 12))
@@ -1594,14 +1600,20 @@ class SymSolverApp(tk.Tk):
 
         for val, label_text in [("slow", "🐢  Slow"), ("normal", "⚡  Normal"),
                                 ("fast", "🚀  Fast"), ("instant", "⏭  Instant")]:
+            rb_border = tk.Frame(speed_frame, bg=p["INPUT_BORDER"],
+                                 highlightbackground=p["INPUT_BORDER"],
+                                 highlightthickness=1, bd=0)
+            rb_border.pack(fill=tk.X, pady=3)
+            rb_inner = tk.Frame(rb_border, bg=p["STEP_BG"], padx=8, pady=5)
+            rb_inner.pack(fill=tk.X)
             rb = tk.Radiobutton(
-                speed_frame, text=label_text, variable=speed_var, value=val,
+                rb_inner, text=label_text, variable=speed_var, value=val,
                 font=label_font, bg=p["STEP_BG"], fg=p["TEXT_BRIGHT"],
                 selectcolor=p["BG"], activebackground=p["STEP_BG"],
                 activeforeground=p["ACCENT"],
                 highlightthickness=0, bd=0, cursor="hand2",
             )
-            rb.pack(anchor="w", pady=2)
+            rb.pack(anchor="w")
 
         # Divider
         tk.Frame(card, bg=p["TEXT_DIM"], height=1).pack(fill=tk.X, pady=(12, 12))
@@ -1611,22 +1623,34 @@ class SymSolverApp(tk.Tk):
                  bg=p["STEP_BG"], fg=p["ACCENT"]).pack(anchor="w", pady=(0, 8))
 
         verify_var = tk.BooleanVar(value=settings.get("show_verification", False))
+        cb1_border = tk.Frame(card, bg=p["INPUT_BORDER"],
+                              highlightbackground=p["INPUT_BORDER"],
+                              highlightthickness=1, bd=0)
+        cb1_border.pack(fill=tk.X, pady=3)
+        cb1_inner = tk.Frame(cb1_border, bg=p["STEP_BG"], padx=8, pady=5)
+        cb1_inner.pack(fill=tk.X)
         tk.Checkbutton(
-            card, text="  Auto-expand verification section", variable=verify_var,
+            cb1_inner, text="  Auto-expand verification section", variable=verify_var,
             font=label_font, bg=p["STEP_BG"], fg=p["TEXT_BRIGHT"],
             selectcolor=p["BG"], activebackground=p["STEP_BG"],
             activeforeground=p["ACCENT"],
             highlightthickness=0, bd=0, cursor="hand2",
-        ).pack(anchor="w", pady=3)
+        ).pack(anchor="w")
 
         graph_var = tk.BooleanVar(value=settings.get("show_graph", True))
+        cb2_border = tk.Frame(card, bg=p["INPUT_BORDER"],
+                              highlightbackground=p["INPUT_BORDER"],
+                              highlightthickness=1, bd=0)
+        cb2_border.pack(fill=tk.X, pady=3)
+        cb2_inner = tk.Frame(cb2_border, bg=p["STEP_BG"], padx=8, pady=5)
+        cb2_inner.pack(fill=tk.X)
         tk.Checkbutton(
-            card, text="  Auto-expand graph & analysis", variable=graph_var,
+            cb2_inner, text="  Auto-expand graph & analysis", variable=graph_var,
             font=label_font, bg=p["STEP_BG"], fg=p["TEXT_BRIGHT"],
             selectcolor=p["BG"], activebackground=p["STEP_BG"],
             activeforeground=p["ACCENT"],
             highlightthickness=0, bd=0, cursor="hand2",
-        ).pack(anchor="w", pady=3)
+        ).pack(anchor="w")
 
         # ── Save button + message ──────────────────────────────────────
         bottom = tk.Frame(card, bg=p["STEP_BG"])
