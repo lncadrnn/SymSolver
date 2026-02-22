@@ -651,6 +651,8 @@ def solve_linear_equation(equation_str: str) -> dict:
     # ── Normalise Unicode symbols to parser-friendly equivalents ─────
     equation_str = equation_str.replace('\u221a', 'sqrt')
     equation_str = equation_str.replace('\u03c0', '(pi)')
+    equation_str = equation_str.replace('[', '(').replace(']', ')')
+    equation_str = equation_str.replace('{', '(').replace('}', ')')
 
     # ── Validate input characters ───────────────────────────────────────
     _validate_characters(equation_str)
