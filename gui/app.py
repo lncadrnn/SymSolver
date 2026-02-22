@@ -8,7 +8,7 @@ Dark theme, scrollable solution area, and collapsible explanations.
 import os
 import re
 import tkinter as tk
-from tkinter import ttk, font as tkfont
+from tkinter import ttk, font as tkfont, filedialog
 import threading
 
 from solver import solve_linear_equation
@@ -987,6 +987,8 @@ class SymSolverApp(tk.Tk):
         _answer_text = result.get("final_answer", "")
 
         def _finish():
+            # ── Add copy/export action bar ───────────────────────────
+            self._add_export_bar(bot, result)
             self._set_input_state(True)
             self._entry.focus_set()
             # Don't auto-scroll in instant mode — let user read from top
@@ -1360,6 +1362,132 @@ class SymSolverApp(tk.Tk):
         else:
             self._scroll_to_bottom()
             self._schedule_next()
+
+    # ── Export / Copy helpers ───────────────────────────────────────────
+
+    @staticmethod
+    def _frac_to_plain(text: str) -> str:
+        """Convert fraction markers ⟦num|den⟧ to num/den for plain text."""
+        return re.sub(r'⟦([^|⟧]+)\|([^⟧]+)⟧', r'(\1)/(\2)', text)
+
+    def _build_plain_text(self, result: dict) -> str:
+        """Convert a solver result dict into a readable plain-text trail."""
+        lines: list[str] = []
+        lines.append("=" * 56)
+        lines.append("  SymSolver — Solution Trail")
+        lines.append("=" * 56)
+
+        # GIVEN
+        given = result.get("given", {})
+        lines.append("\n── GIVEN ──────────────────────────────────")
+        if given.get("problem"):
+            lines.append(self._frac_to_plain(given["problem"]))
+        for key, val in given.get("inputs", {}).items():
+            label = key.replace("_", " ").title()
+            lines.append(f"  {label}: {self._frac_to_plain(val)}")
+
+        # METHOD
+        method = result.get("method", {})
+        lines.append("\n── METHOD ─────────────────────────────────")
+        if method.get("name"):
+            lines.append(f"  {method['name']}")
+        if method.get("description"):
+            lines.append(f"  {method['description']}")
+        for key, val in method.get("parameters", {}).items():
+            label = key.replace("_", " ").title()
+            lines.append(f"  {label}: {val}")
+
+        # STEPS
+        steps = result.get("steps", [])
+        lines.append("\n── STEPS ──────────────────────────────────")
+        for step in steps:
+            num = step.get("step_number", "?")
+            lines.append(f"\n  Step {num}: {self._frac_to_plain(step.get('description', ''))}")
+            if step.get("expression"):
+                lines.append(f"    {self._frac_to_plain(step['expression'])}")
+            if step.get("explanation"):
+                lines.append(f"    → {self._frac_to_plain(step['explanation'])}")
+
+        # FINAL ANSWER
+        lines.append("\n── FINAL ANSWER ───────────────────────────")
+        lines.append(f"  {self._frac_to_plain(result.get('final_answer', '?'))}")
+
+        # VERIFICATION
+        v_steps = result.get("verification_steps", [])
+        if v_steps:
+            lines.append("\n── VERIFICATION ───────────────────────────")
+            for step in v_steps:
+                num = step.get("step_number", "?")
+                lines.append(f"\n  Step {num}: {self._frac_to_plain(step.get('description', ''))}")
+                if step.get("expression"):
+                    lines.append(f"    {self._frac_to_plain(step['expression'])}")
+                if step.get("explanation"):
+                    lines.append(f"    → {self._frac_to_plain(step['explanation'])}")
+
+        # SUMMARY
+        summary = result.get("summary", {})
+        if summary:
+            lines.append("\n── SUMMARY ────────────────────────────────")
+            lines.append(f"  Runtime: {summary.get('runtime_ms', '?')} ms")
+            lines.append(f"  Steps: {summary.get('total_steps', '?')}")
+            lines.append(f"  Verification Steps: {summary.get('verification_steps', '?')}")
+            lines.append(f"  Timestamp: {summary.get('timestamp', '?')}")
+            lines.append(f"  Library: {summary.get('library', '?')}")
+
+        lines.append("\n" + "=" * 56)
+        return "\n".join(lines)
+
+    def _add_export_bar(self, parent: tk.Frame, result: dict) -> None:
+        """Add a copy/save action bar at the bottom of the bot message."""
+        p = _DARK_PALETTE if self._theme == "dark" else _LIGHT_PALETTE
+        bar = tk.Frame(parent, bg=p["BOT_BG"])
+        bar.pack(fill=tk.X, pady=(12, 0))
+
+        btn_font = tkfont.Font(family="Segoe UI", size=11, weight="bold")
+
+        copy_btn = tk.Button(
+            bar, text="📋 Copy to Clipboard", font=btn_font,
+            bg=p["STEP_BG"], fg=p["TEXT_BRIGHT"],
+            activebackground=p["ACCENT"], activeforeground="#ffffff",
+            bd=0, padx=14, pady=6, cursor="hand2", relief=tk.FLAT,
+            command=lambda: self._copy_to_clipboard(result, copy_btn),
+        )
+        copy_btn.pack(side=tk.LEFT, padx=(0, 8))
+
+        save_btn = tk.Button(
+            bar, text="📄 Save as File", font=btn_font,
+            bg=p["STEP_BG"], fg=p["TEXT_BRIGHT"],
+            activebackground=p["ACCENT"], activeforeground="#ffffff",
+            bd=0, padx=14, pady=6, cursor="hand2", relief=tk.FLAT,
+            command=lambda: self._save_as_file(result),
+        )
+        save_btn.pack(side=tk.LEFT)
+
+    def _copy_to_clipboard(self, result: dict, btn: tk.Button) -> None:
+        """Copy the full solution trail as plain text to the clipboard."""
+        text = self._build_plain_text(result)
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        # Brief visual feedback
+        original = btn.cget("text")
+        btn.configure(text="✓ Copied!")
+        self.after(1500, lambda: btn.configure(text=original))
+
+    def _save_as_file(self, result: dict) -> None:
+        """Save the full solution trail to a .txt file chosen by the user."""
+        text = self._build_plain_text(result)
+        eq = result.get("equation", "equation").strip()
+        # Build a safe default filename
+        safe = re.sub(r'[^\w\s\-=]', '', eq)[:40].strip().replace(' ', '_')
+        path = filedialog.asksaveasfilename(
+            title="Save Solution Trail",
+            defaultextension=".txt",
+            initialfile=f"SymSolver_{safe}",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+        )
+        if path:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)
 
     # ── Section header helpers ──────────────────────────────────────────
 
