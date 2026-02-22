@@ -144,6 +144,14 @@ def _format_expr(expr) -> str:
         return _frac(m.group(1), m.group(2))
     s = re.sub(r'(-?[A-Za-z0-9·]+)/(\d+)', _simple_frac_repl, s)
 
+    # Match fractions with variable denominators — e.g. 1/x, 2/y (SymPy
+    # outputs these when the user had x⁻¹ or typed 1/x)
+    # Only match numeric-or-simple-token numerators so we don’t eat complex
+    # expressions that weren’t already wrapped in the paren pass above.
+    def _var_frac_repl(m):
+        return _frac(m.group(1), m.group(2))
+    s = re.sub(r'(-?[0-9]+)/([A-Za-z][A-Za-z0-9]*)', _var_frac_repl, s)
+
     return s
 
 
@@ -162,6 +170,47 @@ def _format_expr_plain(expr) -> str:
     s = re.sub(r'\)\*([A-Za-z])', r')\1', s)
     s = s.replace('*', '·')
     return s
+
+
+def _format_input_str(raw: str) -> str:
+    """Format a RAW user-typed equation side for display.
+
+    Unlike _format_expr, this does NOT go through SymPy, so it preserves:
+    - Term order exactly as typed (e.g. ``1/x + 1`` stays ``1/x + 1``).
+    - Negative-exponent notation (``x^-1`` → ``x⁻¹``, not ``1/x``).
+
+    Applies the same visual transforms as _format_expr:
+    - ``^N`` / ``^(-N)`` → Unicode superscript
+    - ``n/var`` and ``n/N`` → stacked ⟦num|den⟧ markers
+    - Removes ``*`` between digit and variable; remaining ``*`` → ·
+    """
+    s = raw.strip()
+    # ^ exponents → superscript (caret notation, not SymPy **)
+    def _sup_repl(m):
+        exp_text = m.group(1)
+        if exp_text.startswith('(') and exp_text.endswith(')'):
+            exp_text = exp_text[1:-1]
+        return _to_superscript(exp_text)
+    s = re.sub(r'\^\(([^)]+)\)', _sup_repl, s)
+    s = re.sub(r'\^(-?\d+)', _sup_repl, s)
+    # Remove * between coefficient and variable
+    s = re.sub(r'(\d)\*([A-Za-z])', r'\1\2', s)
+    s = re.sub(r'\)\*([A-Za-z])', r')\1', s)
+    s = s.replace('*', '·')
+    # Stacked fractions — parenthesised numerator first: (expr)/token
+    def _paren_frac_repl(m):
+        return _frac(m.group(1), m.group(2))
+    s = re.sub(r'\(([^)]+)\)/([A-Za-z0-9·]+)', _paren_frac_repl, s)
+    # Simple a/b fractions with ANY single-token denominator
+    def _frac_repl(m):
+        return _frac(m.group(1), m.group(2))
+    s = re.sub(r'(-?[A-Za-z0-9·]+)/([A-Za-z0-9·]+)', _frac_repl, s)
+    return s
+
+
+def _format_input_eq(lhs_raw: str, rhs_raw: str) -> str:
+    """Return a display-ready equation string built from the raw typed sides."""
+    return f"{_format_input_str(lhs_raw)} = {_format_input_str(rhs_raw)}"
 
 
 def _format_equation(lhs, rhs) -> str:
@@ -329,32 +378,42 @@ def _nonlinear_error_result(equation_str: str, lhs_str: str, rhs_str: str,
     """
     steps = []
 
-    # Cache formatted originals
+    # ── Use the *raw typed strings* for the given / step-1 display so that
+    #    term order and notation (x^-1, 1/x, etc.) match what the user typed.
+    _fmt_input_lhs = _format_input_str(lhs_str)
+    _fmt_input_rhs = _format_input_str(rhs_str)
+    _fmt_input_eq  = _format_input_eq(lhs_str, rhs_str)
+
+    # SymPy-canonical versions are still needed for step-2 and plain text.
     _fmt_nl_lhs = _format_expr(lhs)
     _fmt_nl_rhs = _format_expr(rhs)
-    _fmt_nl_eq  = _format_equation(lhs, rhs)
 
-    # Step 1: show original
+    # Step 1: show original — use the INPUT form, not SymPy canonical
     steps.append({
         "description": "Starting with the original equation",
-        "expression": _fmt_nl_eq,
+        "expression": _fmt_input_eq,
         "explanation": (
             f"We are given the equation {_format_expr_plain(lhs)} = {_format_expr_plain(rhs)}. "
             f"Let's simplify it first to check if it is linear."
         ),
     })
 
-    # Step 2: expand / combine like terms
+    # Step 2: expand / combine like terms — only if it actually changes something.
+    # expand() on already-simplified expressions like 1/x + 1 returns the same
+    # value (SymPy may reorder terms internally, but symbolically equals the
+    # original).  Showing the step when nothing combined would be misleading.
     lhs_exp = expand(lhs)
     rhs_exp = expand(rhs)
-    steps.append({
-        "description": "Expand and combine like terms",
-        "expression": _format_equation(lhs_exp, rhs_exp),
-        "explanation": (
-            f"After distributing and combining like terms we get: "
-            f"{_format_expr_plain(lhs_exp)} = {_format_expr_plain(rhs_exp)}."
-        ),
-    })
+    _expansion_changed = (lhs_exp != lhs) or (rhs_exp != rhs)
+    if _expansion_changed:
+        steps.append({
+            "description": "Expand and combine like terms",
+            "expression": _format_equation(lhs_exp, rhs_exp),
+            "explanation": (
+                f"After distributing and combining like terms we get: "
+                f"{_format_expr_plain(lhs_exp)} = {_format_expr_plain(rhs_exp)}."
+            ),
+        })
 
     # Compute the effective highest degree (used for degree-based messages)
     combined = expand(lhs - rhs)
@@ -381,11 +440,12 @@ def _nonlinear_error_result(equation_str: str, lhs_str: str, rhs_str: str,
     if reason == "degree" and highest_deg >= 2:
         reason = _detect_nonlinear_reason(combined, var_symbols_list, highest_deg)
 
-    # Step 3 (denominator only): highlight the negative-exponent form
+    # Step 3 (denominator only): highlight the negative-exponent form.
+    # Show the INPUT form so order/notation matches what the user typed.
     if reason == "denominator":
         steps.append({
             "description": "Identify variable in denominator",
-            "expression": _format_equation(lhs_exp, rhs_exp),
+            "expression": _fmt_input_eq,
             "explanation": (
                 "Notice that a variable appears in the denominator. "
                 "A term of the form 1/x is equivalent to x\u207b\u00b9 \u2014 "
@@ -394,11 +454,11 @@ def _nonlinear_error_result(equation_str: str, lhs_str: str, rhs_str: str,
             ),
         })
 
-    # Step 3 (transcendental only): highlight the function
+    # Step 3 (transcendental only): highlight the function.
     if reason == "transcendental":
         steps.append({
             "description": "Identify transcendental function",
-            "expression": _format_equation(lhs_exp, rhs_exp),
+            "expression": _fmt_input_eq,
             "explanation": (
                 "Notice that the variable is placed inside a function "
                 "(trigonometric, logarithmic, or exponential). "
@@ -427,11 +487,11 @@ def _nonlinear_error_result(equation_str: str, lhs_str: str, rhs_str: str,
     return {
         "equation": equation_str,
         "given": {
-            "problem": f"Analyze the equation: {_fmt_nl_eq}",
+            "problem": f"Analyze the equation: {_fmt_input_eq}",
             "inputs": {
-                "equation":   _fmt_nl_eq,
-                "left_side":  _fmt_nl_lhs,
-                "right_side": _fmt_nl_rhs,
+                "equation":   _fmt_input_eq,
+                "left_side":  _fmt_input_lhs,
+                "right_side": _fmt_input_rhs,
                 "variables":  ", ".join(var_names),
             },
         },
