@@ -18,16 +18,143 @@ from sympy.parsing.sympy_parser import (
 TRANSFORMATIONS = standard_transformations + (implicit_multiplication_application,)
 
 # ── palette ────────────────────────────────────────────────────────────────
-C_BG       = "#0f0f0f"
-C_AX       = "#181818"
-C_GRID     = "#252525"
-C_TICK     = "#666666"
-C_SPINE    = "#333333"
-C_LINE1    = "#1a8cff"   # primary line
-C_LINE2    = "#ff8c42"   # secondary line (system)
-C_HLINE    = "#aaaaaa"   # horizontal RHS line (single-var)
-C_DOT      = "#4caf50"   # intersection / solution dot
-C_TEXT     = "#cccccc"
+_DARK_GRAPH = dict(
+    C_BG    = "#0f0f0f",
+    C_AX    = "#181818",
+    C_GRID  = "#252525",
+    C_TICK  = "#ffffff",
+    C_SPINE = "#333333",
+    C_LINE1 = "#1a8cff",
+    C_LINE2 = "#ff8c42",
+    C_HLINE = "#aaaaaa",
+    C_DOT   = "#4caf50",
+    C_TEXT  = "#ffffff",
+)
+_LIGHT_GRAPH = dict(
+    C_BG    = "#ffffff",
+    C_AX    = "#f7f9fc",
+    C_GRID  = "#dde2ea",
+    C_TICK  = "#000000",
+    C_SPINE = "#c5ccd6",
+    C_LINE1 = "#1a5fa3",
+    C_LINE2 = "#d04a00",
+    C_HLINE = "#999999",
+    C_DOT   = "#1b7d1b",
+    C_TEXT  = "#000000",
+)
+
+C_BG       = _DARK_GRAPH["C_BG"]
+C_AX       = _DARK_GRAPH["C_AX"]
+C_GRID     = _DARK_GRAPH["C_GRID"]
+C_TICK     = _DARK_GRAPH["C_TICK"]
+C_SPINE    = _DARK_GRAPH["C_SPINE"]
+C_LINE1    = _DARK_GRAPH["C_LINE1"]
+C_LINE2    = _DARK_GRAPH["C_LINE2"]
+C_HLINE    = _DARK_GRAPH["C_HLINE"]
+C_DOT      = _DARK_GRAPH["C_DOT"]
+C_TEXT     = _DARK_GRAPH["C_TEXT"]
+
+
+def set_theme(theme: str) -> None:
+    """Update the graph colour palette to match the app theme ('dark' or 'light')."""
+    import sys
+    palette = _LIGHT_GRAPH if theme == "light" else _DARK_GRAPH
+    mod = sys.modules[__name__]
+    for k, v in palette.items():
+        setattr(mod, k, v)
+
+
+def restyle_figure(fig, theme: str) -> None:
+    """Re-colour an already-built Figure in-place for a live theme switch."""
+    import matplotlib.colors as mcolors
+
+    from_p = _LIGHT_GRAPH if theme == "dark" else _DARK_GRAPH
+    to_p   = _DARK_GRAPH  if theme == "dark" else _LIGHT_GRAPH
+    set_theme(theme)
+
+    # Build lowercase-hex → new-hex translation table
+    trans = {v.lower(): to_p[k] for k, v in from_p.items()}
+
+    def _map(raw_color):
+        try:
+            h = mcolors.to_hex(raw_color, keep_alpha=False).lower()
+            return trans.get(h, h)
+        except Exception:
+            return raw_color
+
+    # Figure background
+    fig.patch.set_facecolor(_map(fig.patch.get_facecolor()))
+
+    for ax in fig.get_axes():
+        ax.set_facecolor(_map(ax.get_facecolor()))
+
+        for sp in ax.spines.values():
+            sp.set_edgecolor(_map(sp.get_edgecolor()))
+
+        # Tick marks and tick-label text
+        ax.tick_params(colors=to_p["C_TICK"], labelsize=9)
+        for tl in ax.get_xticklabels() + ax.get_yticklabels():
+            tl.set_color(to_p["C_TICK"])
+
+        ax.xaxis.label.set_color(to_p["C_TEXT"])
+        ax.yaxis.label.set_color(to_p["C_TEXT"])
+        ax.title.set_color(to_p["C_TEXT"])
+
+        # Data / axis lines
+        for line in ax.get_lines():
+            try:
+                mapped = trans.get(mcolors.to_hex(line.get_color()).lower())
+                if mapped:
+                    line.set_color(mapped)
+            except Exception:
+                pass
+
+        # Scatter collections
+        for coll in ax.collections:
+            try:
+                fc = coll.get_facecolor()
+                if len(fc):
+                    mapped = trans.get(mcolors.to_hex(fc[0]).lower())
+                    if mapped:
+                        coll.set_facecolor(mapped)
+                ec = coll.get_edgecolor()
+                if len(ec):
+                    mapped = trans.get(mcolors.to_hex(ec[0]).lower())
+                    if mapped:
+                        coll.set_edgecolor(mapped)
+            except Exception:
+                pass
+
+        # Grid lines
+        for gl in ax.get_xgridlines() + ax.get_ygridlines():
+            try:
+                mapped = trans.get(mcolors.to_hex(gl.get_color()).lower())
+                if mapped:
+                    gl.set_color(mapped)
+            except Exception:
+                pass
+
+        # Free text annotations
+        for txt in ax.texts:
+            try:
+                mapped = trans.get(mcolors.to_hex(txt.get_color()).lower())
+                if mapped:
+                    txt.set_color(mapped)
+            except Exception:
+                pass
+
+        # Legend
+        leg = ax.get_legend()
+        if leg:
+            try:
+                leg.get_frame().set_facecolor(_map(leg.get_frame().get_facecolor()))
+                leg.get_frame().set_edgecolor(_map(leg.get_frame().get_edgecolor()))
+                for txt in leg.get_texts():
+                    mapped = trans.get(mcolors.to_hex(txt.get_color()).lower())
+                    if mapped:
+                        txt.set_color(mapped)
+            except Exception:
+                pass
 
 
 def _parse_eq(eq_str):
@@ -455,7 +582,7 @@ def _build_single_var(inputs, final):
 
     ax.set_xlabel(var_name, color=C_TEXT)
     ax.set_ylabel("value", color=C_TEXT)
-    leg = ax.legend(fontsize=8, facecolor="#1e1e1e", edgecolor=C_SPINE,
+    leg = ax.legend(fontsize=8, facecolor=C_BG, edgecolor=C_SPINE,
                     labelcolor=C_TEXT)
     fig.tight_layout(pad=1.2)
     return fig
@@ -509,7 +636,7 @@ def _build_two_var(inputs, final):
                 ax.set_title(f"Vertical line: {xn} = {x_const:g}", color=C_TEXT, fontsize=10)
                 ax.set_xlabel(xn, color=C_TEXT)
                 ax.set_ylabel(yn, color=C_TEXT)
-                ax.legend(fontsize=8, facecolor="#1e1e1e", edgecolor=C_SPINE, labelcolor=C_TEXT)
+                ax.legend(fontsize=8, facecolor=C_BG, edgecolor=C_SPINE, labelcolor=C_TEXT)
                 fig.tight_layout(pad=1.2)
                 return fig
         except Exception:
@@ -526,7 +653,7 @@ def _build_two_var(inputs, final):
                  color=C_TEXT, fontsize=9)
     ax.set_xlabel(xn, color=C_TEXT)
     ax.set_ylabel(yn, color=C_TEXT)
-    leg = ax.legend(fontsize=8, facecolor="#1e1e1e", edgecolor=C_SPINE,
+    leg = ax.legend(fontsize=8, facecolor=C_BG, edgecolor=C_SPINE,
                     labelcolor=C_TEXT)
     fig.tight_layout(pad=1.2)
     return fig
@@ -670,7 +797,7 @@ def _build_single_var_system(inputs, final, var_name):
     ax.set_title(title, color=C_TEXT, fontsize=10)
     ax.set_xlabel(var_name, color=C_TEXT)
     ax.set_ylabel("value", color=C_TEXT)
-    ax.legend(fontsize=7, facecolor="#1e1e1e", edgecolor=C_SPINE, labelcolor=C_TEXT)
+    ax.legend(fontsize=7, facecolor=C_BG, edgecolor=C_SPINE, labelcolor=C_TEXT)
     fig.tight_layout(pad=1.2)
     return fig
 
@@ -782,7 +909,7 @@ def _build_system(inputs, final):
         pad = max((yhi - ylo) * 0.2, 1.0)
         ax.set_ylim(ylo - pad, yhi + pad)
 
-    leg = ax.legend(fontsize=8, facecolor="#1e1e1e", edgecolor=C_SPINE,
+    leg = ax.legend(fontsize=8, facecolor=C_BG, edgecolor=C_SPINE,
                     labelcolor=C_TEXT)
     fig.tight_layout(pad=1.2)
     return fig

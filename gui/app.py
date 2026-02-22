@@ -13,24 +13,86 @@ import threading
 from solver import solve_linear_equation
 
 
-# ── colour palette ──────────────────────────────────────────────────────────
-BG           = "#0a0a0a"
-BG_DARKER    = "#050505"
-HEADER_BG    = "#111111"
-ACCENT       = "#0F4C75"
-ACCENT_HOVER = "#0a3a5c"
-TEXT         = "#d0d0d0"
-TEXT_DIM     = "#cccccc"
-TEXT_BRIGHT  = "#f0f0f0"
-USER_BG      = "#1a1a1a"
-BOT_BG       = "#121212"
-STEP_BG      = "#181818"
-STEP_BORDER  = "#2a2a2a"
-SUCCESS      = "#4caf50"
-ERROR        = "#ff5555"
-INPUT_BG     = "#181818"
-INPUT_BORDER = "#2a2a2a"
-VERIFY_BG    = "#0f1a0f"
+# ── colour palette ─────────────────────────────────────────────────────────
+_DARK_PALETTE = dict(
+    BG           = "#0a0a0a",
+    BG_DARKER    = "#050505",
+    HEADER_BG    = "#111111",
+    ACCENT       = "#1a8cff",
+    ACCENT_HOVER = "#0a70d4",
+    TEXT         = "#d0d0d0",
+    TEXT_DIM     = "#ffffff",
+    TEXT_BRIGHT  = "#f0f0f0",
+    USER_BG      = "#1a1a1a",
+    BOT_BG       = "#121212",
+    STEP_BG      = "#181818",
+    STEP_BORDER  = "#2a2a2a",
+    SUCCESS      = "#4caf50",
+    ERROR        = "#ff5555",
+    INPUT_BG     = "#181818",
+    INPUT_BORDER = "#2a2a2a",
+    VERIFY_BG    = "#0f1a0f",
+    SCROLLBAR_BG = "#2a2a2a",
+    SCROLLBAR_ACT= "#444444",
+    SCROLLBAR_ARR= "#555555",
+)
+# ── Case-badge colour tables (graph analysis card) ────────────────────────
+_DARK_CASE_COLORS = {
+    "one_solution":             {"bg": "#0d1f0d", "border": "#4caf50", "fg": "#4caf50"},
+    "infinite":                 {"bg": "#1a1500", "border": "#f0c040", "fg": "#f0c040"},
+    "no_solution":              {"bg": "#1f0d0d", "border": "#ff5555", "fg": "#ff5555"},
+    "degenerate_identity":      {"bg": "#1a1500", "border": "#f0c040", "fg": "#f0c040"},
+    "degenerate_contradiction":  {"bg": "#1f0d0d", "border": "#ff5555", "fg": "#ff5555"},
+}
+_LIGHT_CASE_COLORS = {
+    "one_solution":             {"bg": "#e8f5e9", "border": "#2e7d32", "fg": "#1b5e20"},
+    "infinite":                 {"bg": "#fff8e1", "border": "#f57f17", "fg": "#e65100"},
+    "no_solution":              {"bg": "#ffebee", "border": "#c62828", "fg": "#b71c1c"},
+    "degenerate_identity":      {"bg": "#fff8e1", "border": "#f57f17", "fg": "#e65100"},
+    "degenerate_contradiction":  {"bg": "#ffebee", "border": "#c62828", "fg": "#b71c1c"},
+}
+
+_LIGHT_PALETTE = dict(
+    BG           = "#f2f4f7",
+    BG_DARKER    = "#e4e8ee",
+    HEADER_BG    = "#ffffff",
+    ACCENT       = "#0F4C75",
+    ACCENT_HOVER = "#0a3a5c",
+    TEXT         = "#444444",
+    TEXT_DIM     = "#000000",
+    TEXT_BRIGHT  = "#111111",
+    USER_BG      = "#e6eaf0",
+    BOT_BG       = "#ffffff",
+    STEP_BG      = "#f7f9fc",
+    STEP_BORDER  = "#dde2ea",
+    SUCCESS      = "#2e7d32",
+    ERROR        = "#c62828",
+    INPUT_BG     = "#ffffff",
+    INPUT_BORDER = "#c5ccd6",
+    VERIFY_BG    = "#e8f5e9",
+    SCROLLBAR_BG = "#c5ccd6",
+    SCROLLBAR_ACT= "#9baabb",
+    SCROLLBAR_ARR= "#888888",
+)
+
+# Active palette (mutable globals — updated by _apply_theme)
+BG           = _DARK_PALETTE["BG"]
+BG_DARKER    = _DARK_PALETTE["BG_DARKER"]
+HEADER_BG    = _DARK_PALETTE["HEADER_BG"]
+ACCENT       = _DARK_PALETTE["ACCENT"]
+ACCENT_HOVER = _DARK_PALETTE["ACCENT_HOVER"]
+TEXT         = _DARK_PALETTE["TEXT"]
+TEXT_DIM     = _DARK_PALETTE["TEXT_DIM"]
+TEXT_BRIGHT  = _DARK_PALETTE["TEXT_BRIGHT"]
+USER_BG      = _DARK_PALETTE["USER_BG"]
+BOT_BG       = _DARK_PALETTE["BOT_BG"]
+STEP_BG      = _DARK_PALETTE["STEP_BG"]
+STEP_BORDER  = _DARK_PALETTE["STEP_BORDER"]
+SUCCESS      = _DARK_PALETTE["SUCCESS"]
+ERROR        = _DARK_PALETTE["ERROR"]
+INPUT_BG     = _DARK_PALETTE["INPUT_BG"]
+INPUT_BORDER = _DARK_PALETTE["INPUT_BORDER"]
+VERIFY_BG    = _DARK_PALETTE["VERIFY_BG"]
 
 
 class SymSolverApp(tk.Tk):
@@ -53,6 +115,8 @@ class SymSolverApp(tk.Tk):
         self._frac_sm = tkfont.Font(family="Consolas", size=11)
 
         self._auto_scroll: bool = True  # False while user has scrolled away from bottom
+        self._theme: str = "dark"        # current theme
+        self._graph_panels: list = []    # [(fig, FigureCanvasTkAgg)] for live re-theme
 
         self._build_ui()
         self._show_welcome()
@@ -64,54 +128,54 @@ class SymSolverApp(tk.Tk):
 
     def _build_ui(self) -> None:
         # header
-        header = tk.Frame(self, bg=HEADER_BG, height=72)
-        header.pack(fill=tk.X)
-        header.pack_propagate(False)
-        tk.Label(
-            header, text="⬡  SymSolver", font=self._title,
+        self._header = tk.Frame(self, bg=HEADER_BG, height=72)
+        self._header.pack(fill=tk.X)
+        self._header.pack_propagate(False)
+        self._header_logo = tk.Label(
+            self._header, text="⬡  SymSolver", font=self._title,
             bg=HEADER_BG, fg=ACCENT,
-        ).pack(side=tk.LEFT, padx=20)
-        tk.Label(
-            header, text="Linear Equation Solver", font=self._small,
+        )
+        self._header_logo.pack(side=tk.LEFT, padx=20)
+        self._header_sub = tk.Label(
+            self._header, text="Linear Equation Solver", font=self._small,
             bg=HEADER_BG, fg=TEXT_DIM,
-        ).pack(side=tk.LEFT, padx=(0, 20), pady=(6, 0))
+        )
+        self._header_sub.pack(side=tk.LEFT, padx=(0, 20), pady=(6, 0))
 
         # new chat button
         self._new_btn = tk.Button(
-            header, text="✦ New Chat", font=self._small,
+            self._header, text="✦ New Chat", font=self._small,
             bg=ACCENT, fg=TEXT_BRIGHT, activebackground=ACCENT_HOVER,
             activeforeground=TEXT_BRIGHT, bd=0, padx=16, pady=6,
             cursor="hand2", command=self._clear_chat,
         )
-        self._new_btn.pack(side=tk.RIGHT, padx=20)
+        self._new_btn.pack(side=tk.RIGHT, padx=(0, 20))
+
+        # theme toggle button
+        self._theme_btn = tk.Button(
+            self._header, text="☀ Light", font=self._small,
+            bg=HEADER_BG, fg=TEXT_DIM, activebackground=HEADER_BG,
+            activeforeground=TEXT_BRIGHT, bd=0, padx=12, pady=6,
+            cursor="hand2", relief=tk.FLAT, highlightthickness=1,
+            highlightbackground=STEP_BORDER,
+            command=self._toggle_theme,
+        )
+        self._theme_btn.pack(side=tk.RIGHT, padx=(0, 8))
 
         # chat area (canvas + scrollbar for widget embedding)
-        chat_wrapper = tk.Frame(self, bg=BG)
-        chat_wrapper.pack(fill=tk.BOTH, expand=True)
+        self._chat_wrapper = tk.Frame(self, bg=BG)
+        self._chat_wrapper.pack(fill=tk.BOTH, expand=True)
 
-        # Custom dark scrollbar style
-        style = ttk.Style()
-        style.theme_use("default")
-        style.configure("Dark.Vertical.TScrollbar",
-                        background="#2a2a2a", troughcolor=BG,
-                        bordercolor=BG, arrowcolor="#555555",
-                        relief=tk.FLAT, borderwidth=0)
-        style.map("Dark.Vertical.TScrollbar",
-                  background=[("active", "#444444"), ("!active", "#2a2a2a")],
-                  arrowcolor=[("active", "#888888"), ("!active", "#555555")])
-        style.layout("Dark.Vertical.TScrollbar", [
-            ("Vertical.Scrollbar.trough", {
-                "sticky": "ns",
-                "children": [
-                    ("Vertical.Scrollbar.thumb", {"expand": 1, "sticky": "nswe"})
-                ]
-            })
-        ])
+        # Custom scrollbar style
+        self._sb_style_name = "Themed.Vertical.TScrollbar"
+        self._style = ttk.Style()
+        self._style.theme_use("default")
+        self._update_scrollbar_style()
 
-        self._canvas = tk.Canvas(chat_wrapper, bg=BG, highlightthickness=0)
+        self._canvas = tk.Canvas(self._chat_wrapper, bg=BG, highlightthickness=0)
         self._scrollbar = ttk.Scrollbar(
-            chat_wrapper, orient=tk.VERTICAL, command=self._canvas.yview,
-            style="Dark.Vertical.TScrollbar",
+            self._chat_wrapper, orient=tk.VERTICAL, command=self._canvas.yview,
+            style=self._sb_style_name,
         )
         self._chat_frame = tk.Frame(self._canvas, bg=BG)
 
@@ -133,15 +197,16 @@ class SymSolverApp(tk.Tk):
         self._canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         # input bar
-        input_bar = tk.Frame(self, bg=BG_DARKER, pady=14)
-        input_bar.pack(fill=tk.X, side=tk.BOTTOM)
+        self._input_bar = tk.Frame(self, bg=BG_DARKER, pady=14)
+        self._input_bar.pack(fill=tk.X, side=tk.BOTTOM)
 
-        inner = tk.Frame(input_bar, bg=INPUT_BG, highlightbackground=INPUT_BORDER,
-                         highlightthickness=1)
-        inner.pack(fill=tk.X, padx=20)
+        self._input_inner = tk.Frame(self._input_bar, bg=INPUT_BG,
+                                     highlightbackground=INPUT_BORDER,
+                                     highlightthickness=1)
+        self._input_inner.pack(fill=tk.X, padx=20)
 
         self._entry = tk.Entry(
-            inner, font=self._mono, bg=INPUT_BG, fg=TEXT_BRIGHT,
+            self._input_inner, font=self._mono, bg=INPUT_BG, fg=TEXT_BRIGHT,
             insertbackground=TEXT_BRIGHT, bd=0, relief=tk.FLAT,
             disabledbackground=INPUT_BG, disabledforeground="#666666",
         )
@@ -149,7 +214,7 @@ class SymSolverApp(tk.Tk):
         self._entry.focus_set()
 
         self._send_btn = tk.Button(
-            inner, text="Solve ➤", font=self._bold,
+            self._input_inner, text="Solve ➤", font=self._bold,
             bg=ACCENT, fg=TEXT_BRIGHT, activebackground=ACCENT_HOVER,
             activeforeground=TEXT_BRIGHT, bd=0, padx=18, pady=6,
             cursor="hand2", command=self._on_send,
@@ -158,7 +223,7 @@ class SymSolverApp(tk.Tk):
 
         # Stop button — shown only during solving/animation
         self._stop_btn = tk.Button(
-            inner, text="⏹", font=self._bold,
+            self._input_inner, text="⏹", font=self._bold,
             bg="#3a1a1a", fg="#ff6b6b", activebackground="#4a2020",
             activeforeground="#ff9999", bd=0, padx=14, pady=6,
             cursor="hand2", relief=tk.FLAT,
@@ -205,7 +270,163 @@ class SymSolverApp(tk.Tk):
         self._canvas.update_idletasks()
         self._canvas.yview_moveto(1.0)
 
-    # ── Welcome screen ──────────────────────────────────────────────────
+    # ── Theme ────────────────────────────────────────────────────────────
+
+    def _update_scrollbar_style(self) -> None:
+        p = _DARK_PALETTE if self._theme == "dark" else _LIGHT_PALETTE
+        bg  = p["BG"]
+        sbg = p["SCROLLBAR_BG"]
+        sac = p["SCROLLBAR_ACT"]
+        sar = p["SCROLLBAR_ARR"]
+        self._style.configure(self._sb_style_name,
+                              background=sbg, troughcolor=bg,
+                              bordercolor=bg, arrowcolor=sar,
+                              relief=tk.FLAT, borderwidth=0)
+        self._style.map(self._sb_style_name,
+                        background=[("active", sac), ("!active", sbg)],
+                        arrowcolor=[("active", "#cccccc"), ("!active", sar)])
+        self._style.layout(self._sb_style_name, [
+            ("Vertical.Scrollbar.trough", {
+                "sticky": "ns",
+                "children": [
+                    ("Vertical.Scrollbar.thumb", {"expand": 1, "sticky": "nswe"})
+                ]
+            })
+        ])
+
+    def _toggle_theme(self) -> None:
+        self._theme = "light" if self._theme == "dark" else "dark"
+        self._apply_theme()
+
+    def _apply_theme(self) -> None:
+        """Update global colour variables and re-style all static widgets."""
+        import sys
+        p = _DARK_PALETTE if self._theme == "dark" else _LIGHT_PALETTE
+        mod = sys.modules[__name__]
+        for k, v in p.items():
+            if k in ("SCROLLBAR_BG", "SCROLLBAR_ACT", "SCROLLBAR_ARR"):
+                continue
+            setattr(mod, k, v)
+
+        # header
+        self._header.configure(bg=p["HEADER_BG"])
+        self._header_logo.configure(bg=p["HEADER_BG"], fg=p["ACCENT"])
+        self._header_sub.configure(bg=p["HEADER_BG"], fg=p["TEXT_DIM"])
+        self._new_btn.configure(bg=p["ACCENT"], fg="#ffffff",
+                                activebackground=p["ACCENT_HOVER"],
+                                activeforeground="#ffffff")
+        self._theme_btn.configure(
+            text="🌙 Dark" if self._theme == "light" else "☀ Light",
+            bg=p["HEADER_BG"], fg=p["TEXT_DIM"],
+            activebackground=p["HEADER_BG"], activeforeground=p["TEXT_BRIGHT"],
+            highlightbackground=p["STEP_BORDER"],
+        )
+        # canvas / chat area
+        self.configure(bg=p["BG"])
+        self._chat_wrapper.configure(bg=p["BG"])
+        self._canvas.configure(bg=p["BG"])
+        self._chat_frame.configure(bg=p["BG"])
+        # input bar
+        self._input_bar.configure(bg=p["BG_DARKER"])
+        self._input_inner.configure(bg=p["INPUT_BG"],
+                                    highlightbackground=p["INPUT_BORDER"])
+        self._entry.configure(bg=p["INPUT_BG"], fg=p["TEXT_BRIGHT"],
+                              insertbackground=p["TEXT_BRIGHT"],
+                              disabledbackground=p["INPUT_BG"])
+        self._send_btn.configure(bg=p["ACCENT"], fg="#ffffff",
+                                 activebackground=p["ACCENT_HOVER"],
+                                 activeforeground="#ffffff")
+        # scrollbar
+        self._update_scrollbar_style()
+        # graph palette
+        try:
+            from solver.graph import set_theme as _graph_set_theme
+            _graph_set_theme(self._theme)
+        except Exception:
+            pass
+
+        # re-colour all existing chat widgets
+        self._retheme_chat(p)
+        # re-colour all embedded matplotlib graphs
+        self._retheme_graphs()
+
+    def _retheme_graphs(self) -> None:
+        """Re-colour every embedded matplotlib figure and its tk canvas widget."""
+        try:
+            from solver.graph import restyle_figure
+        except Exception:
+            return
+        p = _DARK_PALETTE if self._theme == "dark" else _LIGHT_PALETTE
+        for entry in self._graph_panels:
+            try:
+                fig, mpl_canvas, tk_widget = entry
+                restyle_figure(fig, self._theme)
+                mpl_canvas.draw()
+                # Also translate the tk widget background
+                tk_widget.configure(bg=p["STEP_BG"])
+            except Exception:
+                pass
+
+    def _retheme_chat(self, p: dict) -> None:
+        """Translate palette colours on every widget already inside the chat frame."""
+        # Build old-hex → new-hex mapping.
+        # If we just switched TO light, the widgets were painted with dark colours.
+        # If we just switched TO dark, the widgets were painted with light colours.
+        from_palette = _DARK_PALETTE if self._theme == "light" else _LIGHT_PALETTE
+        trans = {}
+        for key, new_val in p.items():
+            old_val = from_palette.get(key)
+            if old_val:
+                trans[old_val.lower()] = new_val
+
+        # Also translate case-badge colours (hardcoded, not in global palette)
+        from_cases = _DARK_CASE_COLORS if self._theme == "light" else _LIGHT_CASE_COLORS
+        to_cases   = _LIGHT_CASE_COLORS if self._theme == "light" else _DARK_CASE_COLORS
+        for case_key in from_cases:
+            for slot in ("bg", "border", "fg"):
+                old_c = from_cases[case_key][slot]
+                new_c = to_cases[case_key][slot]
+                trans[old_c.lower()] = new_c
+
+        _ATTRS = (
+            "bg", "fg",
+            "activebackground", "activeforeground",
+            "highlightbackground", "highlightcolor",
+            "insertbackground",
+        )
+
+        def _norm(widget, raw) -> str:
+            """Normalize any Tkinter color value to lowercase 6-digit hex.
+
+            Tkinter on Windows may return colors as 12-digit strings like
+            '#00000a0a0a0a' instead of '#0a0a0a', so we normalise through
+            winfo_rgb() which always gives the 0-65535 component triplet.
+            """
+            try:
+                r, g, b = widget.winfo_rgb(raw)
+                return "#{:02x}{:02x}{:02x}".format(r >> 8, g >> 8, b >> 8)
+            except Exception:
+                return str(raw).lower().strip()
+
+        def _walk(widget):
+            try:
+                cfg = widget.configure()
+                patches = {}
+                for attr in _ATTRS:
+                    if attr in cfg:
+                        norm = _norm(widget, widget.cget(attr))
+                        new_val = trans.get(norm)
+                        if new_val:
+                            patches[attr] = new_val
+                if patches:
+                    widget.configure(**patches)
+            except Exception:
+                pass
+            for child in widget.winfo_children():
+                _walk(child)
+
+        _walk(self._chat_frame)
+
 
     def _show_welcome(self) -> None:
         self._welcome_frame = tk.Frame(self._chat_frame, bg=BG)
@@ -254,6 +475,7 @@ class SymSolverApp(tk.Tk):
         self._anim_queue = []
         self._anim_idx = 0
         self._auto_scroll = True
+        self._graph_panels.clear()
         for w in self._chat_frame.winfo_children():
             w.destroy()
         self._show_welcome()
@@ -669,15 +891,15 @@ class SymSolverApp(tk.Tk):
 
             btn = tk.Button(
                 toggle_frame, text="▾ Hide Explanation", font=self._small,
-                bg="#252525", fg=ACCENT, activebackground="#303030",
-                activeforeground="#3d8ecf", bd=0, cursor="hand2",
+                bg=STEP_BORDER, fg=ACCENT, activebackground=STEP_BG,
+                activeforeground=ACCENT_HOVER, bd=0, cursor="hand2",
                 anchor="w", padx=10, pady=4,
                 relief=tk.FLAT, highlightthickness=1,
-                highlightbackground="#333333", highlightcolor=ACCENT,
+                highlightbackground=STEP_BORDER, highlightcolor=ACCENT,
             )
             btn.configure(command=lambda b=btn: _toggle(b=b))
-            btn.bind("<Enter>", lambda e, b=btn: b.configure(bg="#303030", fg="#3d8ecf"))
-            btn.bind("<Leave>", lambda e, b=btn: b.configure(bg="#252525", fg=ACCENT))
+            btn.bind("<Enter>", lambda e, b=btn: b.configure(bg=STEP_BG, fg=ACCENT_HOVER))
+            btn.bind("<Leave>", lambda e, b=btn: b.configure(bg=STEP_BORDER, fg=ACCENT))
             btn.pack(anchor="w", pady=(2, 0))
             if callback:
                 callback()
@@ -690,7 +912,7 @@ class SymSolverApp(tk.Tk):
         self._render_section_header(parent, "FINAL ANSWER", "✓")
         ans_frame = tk.Frame(parent, bg=SUCCESS, padx=1, pady=1)
         ans_frame.pack(fill=tk.X, pady=(2, 4))
-        ans_inner = tk.Frame(ans_frame, bg="#0f1a0f", padx=16, pady=12)
+        ans_inner = tk.Frame(ans_frame, bg=VERIFY_BG, padx=16, pady=12)
         ans_inner.pack(fill=tk.X)
 
         lines = final_answer.split("\n")
@@ -698,7 +920,7 @@ class SymSolverApp(tk.Tk):
 
     def _type_answer_lines(self, parent, lines, idx):
         if idx < len(lines):
-            self._type_label(parent, lines[idx], self._mono, "#0f1a0f", TEXT_BRIGHT,
+            self._type_label(parent, lines[idx], self._mono, VERIFY_BG, TEXT_BRIGHT,
                              callback=lambda: self._type_answer_lines(parent, lines, idx + 1))
         else:
             self._scroll_to_bottom()
@@ -914,13 +1136,9 @@ class SymSolverApp(tk.Tk):
             self._type_label(card, text, self._mono, card_bg, color, callback=_next)
 
     # ── Case badge colours ──────────────────────────────────────────────
-    _CASE_COLORS = {
-        "one_solution":             {"bg": "#0d1f0d", "border": "#4caf50", "fg": "#4caf50"},
-        "infinite":                 {"bg": "#1a1500", "border": "#f0c040", "fg": "#f0c040"},
-        "no_solution":              {"bg": "#1f0d0d", "border": "#ff5555", "fg": "#ff5555"},
-        "degenerate_identity":      {"bg": "#1a1500", "border": "#f0c040", "fg": "#f0c040"},
-        "degenerate_contradiction": {"bg": "#1f0d0d", "border": "#ff5555", "fg": "#ff5555"},
-    }
+    def _get_case_colors(self):
+        """Return case-label color dict for the current theme."""
+        return _LIGHT_CASE_COLORS if self._theme == "light" else _DARK_CASE_COLORS
 
     def _animate_graph(self, parent, result):
         """Collapsible Graph & Analysis panel — graph on top, analysis card below."""
@@ -966,6 +1184,7 @@ class SymSolverApp(tk.Tk):
                     widget = canvas.get_tk_widget()
                     widget.configure(bg=STEP_BG, highlightthickness=0)
                     widget.pack(fill=tk.X, padx=2, pady=(8, 4))
+                    self._graph_panels.append((fig, canvas, widget))
                 except Exception as exc:
                     tk.Label(c, text=f"Graph error: {exc}", font=self._small,
                              bg=STEP_BG, fg=ERROR, anchor="w").pack(fill=tk.X, padx=8)
@@ -976,7 +1195,7 @@ class SymSolverApp(tk.Tk):
                     cb()
                 return
 
-            colors = self._CASE_COLORS.get(
+            colors = self._get_case_colors().get(
                 analysis.get("case", ""),
                 {"bg": STEP_BG, "border": ACCENT, "fg": ACCENT},
             )
@@ -998,7 +1217,7 @@ class SymSolverApp(tk.Tk):
             for line in analysis["description"].split("\n"):
                 items.append(("small", line, TEXT_DIM))
             if analysis.get("detail"):
-                items.append(("mono", f"\n  Condition:  {analysis['detail']}", "#888888"))
+                items.append(("mono", f"\n  Condition:  {analysis['detail']}", TEXT_DIM))
             if analysis.get("solution"):
                 items.append(("sep", None, card_border))
                 items.append(("bold", f"Result:  {analysis['solution']}", card_fg))
