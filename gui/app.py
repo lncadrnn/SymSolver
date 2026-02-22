@@ -5,6 +5,7 @@ A chat-style interface for solving linear equations step-by-step.
 Dark theme, scrollable solution area, and collapsible explanations.
 """
 
+import os
 import re
 import tkinter as tk
 from tkinter import ttk, font as tkfont
@@ -117,6 +118,7 @@ class SymSolverApp(tk.Tk):
         self._auto_scroll: bool = True  # False while user has scrolled away from bottom
         self._theme: str = "dark"        # current theme
         self._graph_panels: list = []    # [(fig, FigureCanvasTkAgg)] for live re-theme
+        self._logo_photo = None          # Hold reference to prevent GC
 
         self._build_ui()
         self._show_welcome()
@@ -131,20 +133,13 @@ class SymSolverApp(tk.Tk):
         self._header = tk.Frame(self, bg=HEADER_BG, height=72)
         self._header.pack(fill=tk.X)
         self._header.pack_propagate(False)
-        self._header_logo = tk.Label(
-            self._header, text="⬡  SymSolver", font=self._title,
-            bg=HEADER_BG, fg=ACCENT,
-        )
+        self._header_logo = self._load_header_logo()
         self._header_logo.pack(side=tk.LEFT, padx=20)
-        self._header_sub = tk.Label(
-            self._header, text="Linear Equation Solver", font=self._small,
-            bg=HEADER_BG, fg=TEXT_DIM,
-        )
-        self._header_sub.pack(side=tk.LEFT, padx=(0, 20), pady=(6, 0))
 
         # new chat button
+        self._small_bold = tkfont.Font(family="Segoe UI", size=12, weight="bold")
         self._new_btn = tk.Button(
-            self._header, text="✦ New Chat", font=self._small,
+            self._header, text="+ New Chat", font=self._small_bold,
             bg=ACCENT, fg=TEXT_BRIGHT, activebackground=ACCENT_HOVER,
             activeforeground=TEXT_BRIGHT, bd=0, padx=16, pady=6,
             cursor="hand2", command=self._clear_chat,
@@ -294,8 +289,41 @@ class SymSolverApp(tk.Tk):
             })
         ])
 
+    def _load_header_logo(self):
+        """Load the theme-appropriate PNG logo for the header."""
+        try:
+            from PIL import Image, ImageTk
+            base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets")
+            fname = "darkmode-logo.png" if self._theme == "dark" else "lightmode-logo.png"
+            path = os.path.normpath(os.path.join(base, fname))
+            if not os.path.exists(path):
+                raise FileNotFoundError(path)
+            img = Image.open(path)
+            h = 48
+            w = int(h * img.width / img.height)
+            img = img.resize((w, h), Image.Resampling.LANCZOS)
+            self._logo_photo = ImageTk.PhotoImage(img)
+            return tk.Label(self._header, image=self._logo_photo, bg=HEADER_BG)
+        except Exception as e:
+            print(f"Could not load logo: {e}")
+            return tk.Label(self._header, text="SymSolver", font=self._title,
+                            bg=HEADER_BG, fg=ACCENT)
+
+    def _refresh_header_logo(self):
+        """Swap header logo image when theme changes."""
+        p = _DARK_PALETTE if self._theme == "dark" else _LIGHT_PALETTE
+        try:
+            self._header_logo.pack_forget()
+            self._header_logo.destroy()
+        except Exception:
+            pass
+        self._header_logo = self._load_header_logo()
+        self._header_logo.configure(bg=p["HEADER_BG"])
+        self._header_logo.pack(side=tk.LEFT, padx=20)
+
     def _toggle_theme(self) -> None:
         self._theme = "light" if self._theme == "dark" else "dark"
+        self._refresh_header_logo()
         self._apply_theme()
 
     def _apply_theme(self) -> None:
@@ -310,8 +338,7 @@ class SymSolverApp(tk.Tk):
 
         # header
         self._header.configure(bg=p["HEADER_BG"])
-        self._header_logo.configure(bg=p["HEADER_BG"], fg=p["ACCENT"])
-        self._header_sub.configure(bg=p["HEADER_BG"], fg=p["TEXT_DIM"])
+        self._header_logo.configure(bg=p["HEADER_BG"])
         self._new_btn.configure(bg=p["ACCENT"], fg="#ffffff",
                                 activebackground=p["ACCENT_HOVER"],
                                 activeforeground="#ffffff")
@@ -390,7 +417,7 @@ class SymSolverApp(tk.Tk):
 
         _ATTRS = (
             "bg", "fg",
-            "activebackground", "activeforeground",
+            "activebackground",
             "highlightbackground", "highlightcolor",
             "insertbackground",
         )
@@ -457,7 +484,7 @@ class SymSolverApp(tk.Tk):
             btn = tk.Button(
                 self._welcome_frame, text=eq, font=self._mono,
                 bg=STEP_BG, fg=ACCENT, activebackground=ACCENT,
-                activeforeground=TEXT_BRIGHT, bd=0, padx=20, pady=8,
+                activeforeground="#ffffff", bd=0, padx=20, pady=8,
                 cursor="hand2",
                 command=lambda e=eq: self._use_example(e),
             )
