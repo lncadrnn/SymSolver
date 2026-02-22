@@ -59,6 +59,10 @@ class Sidebar:
         self._canvas.bind("<Configure>",
                           lambda e: self._canvas.itemconfig("inner", width=e.width))
 
+        # Fixed account bar at the very bottom (outside scrollable area)
+        self._account_bar = tk.Frame(self._panel, bg="#050505")
+        # Not packed yet — built dynamically on open
+
         # Track current "page" inside sidebar
         self._page = "main"  # "main" | "login" | "register" | "history" | "settings"
 
@@ -99,6 +103,7 @@ class Sidebar:
         self._panel.configure(bg=c["bg"])
         self._canvas.configure(bg=c["bg"])
         self._inner.configure(bg=c["bg"])
+        self._account_bar.configure(bg=c["bg"])
 
     # ── Scrolling ───────────────────────────────────────────────────────
 
@@ -150,6 +155,7 @@ class Sidebar:
         self._backdrop.place_forget()
         self._canvas.unbind("<MouseWheel>")
         self._clear_inner()
+        self._clear_account_bar()
 
     # ── Page rendering ──────────────────────────────────────────────────
 
@@ -157,8 +163,14 @@ class Sidebar:
         for w in self._inner.winfo_children():
             w.destroy()
 
+    def _clear_account_bar(self) -> None:
+        for w in self._account_bar.winfo_children():
+            w.destroy()
+        self._account_bar.pack_forget()
+
     def _render_page(self) -> None:
         self._clear_inner()
+        self._clear_account_bar()
         c = self.c
         self._inner.configure(bg=c["bg"])
 
@@ -178,67 +190,124 @@ class Sidebar:
     def _render_main(self) -> None:
         c = self.c
 
-        # Close button row
+        # Top row: logo (left) + close button (right), vertically centred
         top = tk.Frame(self._inner, bg=c["bg"])
         top.pack(fill=tk.X, padx=12, pady=(14, 0))
+
+        # Logo on the left
+        try:
+            import os
+            from PIL import Image, ImageTk
+            base = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "..", "assets")
+            fname = ("darkmode-logo.png" if self.app._theme == "dark"
+                     else "lightmode-logo.png")
+            path = os.path.normpath(os.path.join(base, fname))
+            img = Image.open(path)
+            h = 56
+            w = int(h * img.width / img.height)
+            img = img.resize((w, h), Image.Resampling.LANCZOS)
+            self._sidebar_logo_photo = ImageTk.PhotoImage(img)
+            tk.Label(top, image=self._sidebar_logo_photo,
+                     bg=c["bg"]).pack(side=tk.LEFT)
+            tk.Label(top, text="SymSolver", font=self._font_title,
+                     bg=c["bg"], fg=c["fg"]).pack(side=tk.LEFT, padx=(6, 0))
+        except Exception:
+            tk.Label(top, text="SymSolver", font=self._font_title,
+                     bg=c["bg"], fg=c["accent"]).pack(side=tk.LEFT)
+
+        # Close button on the right
         tk.Button(top, text="✕", font=self._font_icon, bg=c["bg"], fg=c["dim"],
                   activebackground=c["bg"], activeforeground=c["fg"],
                   bd=0, cursor="hand2", command=self.close).pack(side=tk.RIGHT)
 
-        # User section
-        user_frame = tk.Frame(self._inner, bg=c["bg"])
-        user_frame.pack(fill=tk.X, padx=20, pady=(18, 10))
-
-        if self._current_user:
-            # Logged-in state
-            avatar = tk.Label(user_frame, text="👤", font=self._font_icon,
-                              bg=c["bg"], fg=c["accent"])
-            avatar.pack(anchor="w")
-            tk.Label(user_frame, text=self._current_user, font=self._font_title,
-                     bg=c["bg"], fg=c["fg"]).pack(anchor="w", pady=(2, 0))
-            tk.Label(user_frame, text="Logged in", font=self._font_small,
-                     bg=c["bg"], fg=c["success"]).pack(anchor="w")
-
-            # Logout button
-            self._make_menu_button(user_frame, "↪  Log Out", self._logout,
-                                   fg=c["error"], pady=(8, 0))
-        else:
-            # Guest state
-            avatar = tk.Label(user_frame, text="👤", font=self._font_icon,
-                              bg=c["bg"], fg=c["dim"])
-            avatar.pack(anchor="w")
-            tk.Label(user_frame, text="Guest", font=self._font_title,
-                     bg=c["bg"], fg=c["fg"]).pack(anchor="w", pady=(2, 0))
-            tk.Label(user_frame, text="Log in to save your history",
-                     font=self._font_small, bg=c["bg"],
-                     fg=c["dim"]).pack(anchor="w")
-
-            btn_row = tk.Frame(user_frame, bg=c["bg"])
-            btn_row.pack(anchor="w", pady=(10, 0))
-
-            self._make_accent_button(btn_row, "Log In",
-                                     lambda: self._go_page("login"))
-            self._make_outline_button(btn_row, "Register",
-                                      lambda: self._go_page("register"))
-
-        # Divider
-        self._divider()
-
-        # Menu items
+        # Menu items (top section)
         menu = tk.Frame(self._inner, bg=c["bg"])
-        menu.pack(fill=tk.X, padx=12, pady=(4, 0))
+        menu.pack(fill=tk.X, padx=12, pady=(10, 0))
 
         if self._current_user:
             self._make_menu_button(menu, "📋  History", lambda: self._go_page("history"))
 
-        self._make_menu_button(menu, "💬  Chat", self._go_chat)
+        self._make_menu_button(menu, "💬  SymSolver", self._go_chat)
         self._make_menu_button(menu, "⚙  Settings", self._open_settings)
 
-        # Divider + version
+        # Divider below settings
         self._divider()
-        tk.Label(self._inner, text="SymSolver v1.0", font=self._font_small,
-                 bg=c["bg"], fg=c["dim"]).pack(anchor="w", padx=20, pady=(4, 20))
 
+        # Below the divider: history list or prompt to log in
+        if self._current_user:
+            history = get_history(self._current_user_key)
+            if history:
+                for i, rec in enumerate(history[:5]):  # show last 5
+                    self._render_history_item(rec, i)
+                if len(history) > 5:
+                    tk.Label(self._inner, text=f"+ {len(history) - 5} more...",
+                             font=self._font_small, bg=c["bg"], fg=c["dim"],
+                             cursor="hand2").pack(anchor="w", padx=20, pady=(4, 0))
+            else:
+                tk.Label(self._inner, text="No history yet",
+                         font=self._font_small, bg=c["bg"],
+                         fg=c["dim"]).pack(pady=(10, 0))
+        else:
+            tk.Label(self._inner, text="Log in to save history",
+                     font=self._font_small, bg=c["bg"],
+                     fg=c["dim"]).pack(pady=(10, 0))
+
+        # ── Fixed account bar at the bottom of the panel ────────────────
+        self._build_account_bar()
+    def _build_account_bar(self) -> None:
+        """Build the fixed account section at the very bottom of the panel."""
+        c = self.c
+        bar = self._account_bar
+        bar.configure(bg=c["bg"])
+
+        # Divider line at top of account bar
+        tk.Frame(bar, bg=c["border"], height=1).pack(fill=tk.X, padx=16)
+
+        content = tk.Frame(bar, bg=c["bg"])
+        content.pack(fill=tk.X, padx=16, pady=(10, 14))
+
+        if self._current_user:
+            # Logged-in row: avatar + name + logout
+            row = tk.Frame(content, bg=c["bg"])
+            row.pack(fill=tk.X)
+
+            tk.Label(row, text="👤", font=self._font_icon,
+                     bg=c["bg"], fg=c["accent"]).pack(side=tk.LEFT, padx=(0, 8))
+
+            name_block = tk.Frame(row, bg=c["bg"])
+            name_block.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            tk.Label(name_block, text=self._current_user, font=self._font_bold,
+                     bg=c["bg"], fg=c["fg"], anchor="w").pack(fill=tk.X)
+            tk.Label(name_block, text="Logged in", font=self._font_small,
+                     bg=c["bg"], fg=c["success"], anchor="w").pack(fill=tk.X)
+
+            tk.Button(row, text="↪", font=self._font_icon,
+                      bg=c["bg"], fg=c["error"],
+                      activebackground=c["bg"], activeforeground=c["error"],
+                      bd=0, cursor="hand2",
+                      command=self._logout).pack(side=tk.RIGHT)
+        else:
+            # Guest row: avatar + Guest label (vertically centred)
+            row = tk.Frame(content, bg=c["bg"])
+            row.pack(fill=tk.X)
+
+            tk.Label(row, text="👤", font=self._font_icon,
+                     bg=c["bg"], fg=c["dim"]).pack(side=tk.LEFT, padx=(0, 8))
+            tk.Label(row, text="Guest", font=self._font_bold,
+                     bg=c["bg"], fg=c["fg"]).pack(side=tk.LEFT)
+
+            btn_row = tk.Frame(content, bg=c["bg"])
+            btn_row.pack(fill=tk.X, pady=(6, 0))
+            self._make_accent_button(btn_row, "Log In",
+                                     lambda: self._go_page("login"),
+                                     small=True)
+            self._make_outline_button(btn_row, "Register",
+                                      lambda: self._go_page("register"),
+                                      small=True)
+
+        # Pack the bar at the bottom of the panel (below the canvas)
+        bar.pack(side=tk.BOTTOM, fill=tk.X)
     # ── Login page ──────────────────────────────────────────────────────
 
     def _render_login(self) -> None:
@@ -597,13 +666,16 @@ class Sidebar:
         return btn
 
     def _make_accent_button(self, parent, text, command,
-                            fill=False) -> tk.Button:
+                            fill=False, small=False) -> tk.Button:
         c = self.c
-        btn = tk.Button(parent, text=text, font=self._font_bold,
+        _font = self._font_small if small else self._font_bold
+        _px = 12 if small else 20
+        _py = 4 if small else 8
+        btn = tk.Button(parent, text=text, font=_font,
                         bg=c["accent"], fg="#ffffff",
                         activebackground=c["accent_h"],
                         activeforeground="#ffffff",
-                        bd=0, padx=20, pady=8, cursor="hand2",
+                        bd=0, padx=_px, pady=_py, cursor="hand2",
                         command=command)
         if fill:
             btn.pack(fill=tk.X)
@@ -611,17 +683,26 @@ class Sidebar:
             btn.pack(side=tk.LEFT, padx=(0, 8))
         return btn
 
-    def _make_outline_button(self, parent, text, command) -> tk.Button:
+    def _make_outline_button(self, parent, text, command,
+                              small=False) -> tk.Button:
         c = self.c
-        btn = tk.Button(parent, text=text, font=self._font_bold,
+        _font = self._font_small if small else self._font_bold
+        _px = 10 if small else 18
+        _py = 2 if small else 6
+        _bpad = 1 if small else 2
+        # Wrap in a border frame for a visible outline on all sides
+        border_frame = tk.Frame(parent, bg=c["accent"],
+                                highlightbackground=c["accent"],
+                                highlightthickness=0, bd=0,
+                                padx=_bpad, pady=_bpad)
+        border_frame.pack(side=tk.LEFT, padx=(0, 8))
+        btn = tk.Button(border_frame, text=text, font=_font,
                         bg=c["bg"], fg=c["accent"],
                         activebackground=c["card"],
                         activeforeground=c["accent"],
-                        bd=0, padx=20, pady=8, cursor="hand2",
-                        highlightbackground=c["accent"],
-                        highlightthickness=1,
+                        bd=0, padx=_px, pady=_py, cursor="hand2",
                         command=command)
-        btn.pack(side=tk.LEFT, padx=(0, 8))
+        btn.pack()
         return btn
 
     def _make_link_button(self, parent, text, command) -> None:
