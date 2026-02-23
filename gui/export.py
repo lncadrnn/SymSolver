@@ -278,9 +278,12 @@ class ExportMixin:
         # ── GRAPH & ANALYSIS ────────────────────────────────────────
         graph_img_path = None
         try:
-            from solver.graph import build_figure, analyze_result
+            from solver.graph import build_figure, analyze_result, restyle_figure
             fig = build_figure(result)
             if fig is not None:
+                # Restyle to light theme so axis labels/ticks are visible
+                # on the white PDF background
+                restyle_figure(fig, "light")
                 tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
                 fig.savefig(tmp.name, dpi=150, bbox_inches="tight",
                             facecolor="#ffffff", edgecolor="none")
