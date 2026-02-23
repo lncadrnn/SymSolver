@@ -314,6 +314,12 @@ class SymSolverApp(
         self._refresh_header_logo()
         self._apply_theme()
         self._sidebar.refresh_theme()
+        # Persist the theme choice
+        from gui.storage import get_settings, save_settings
+        user_key = self._sidebar.current_user if hasattr(self, '_sidebar') else None
+        settings = get_settings(user_key)
+        settings["theme"] = self._theme
+        save_settings(settings, user_key)
 
     def _apply_theme(self) -> None:
         """Update global colour variables and re-style all static widgets."""
