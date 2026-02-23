@@ -1,6 +1,6 @@
-"""
-Step-by-step linear equation solver using SymPy.
+""" Step-by-step linear equation solver using SymPy."""
 
+"""
 Parses linear equations — single-variable (e.g. "2x + 3 = 7"),
 multi-variable (e.g. "2x + 4y = 1"), or systems of equations
 (e.g. "x + y = 10, x - y = 2") — and produces human-readable
