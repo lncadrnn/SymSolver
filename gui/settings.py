@@ -15,7 +15,7 @@ class SettingsMixin:
 
     def show_settings_page(self) -> None:
         """Replace chat content with a full-page settings view."""
-        from gui.storage import get_settings, save_settings
+        from gui.storage import get_settings, save_settings, clear_history, clear_all_data
 
         if hasattr(self, '_settings_frame') and self._settings_frame.winfo_exists():
             self._settings_frame.destroy()
@@ -70,8 +70,7 @@ class SettingsMixin:
         self._settings_scroll_id = settings_canvas.bind_all(
             "<MouseWheel>", _settings_mousewheel)
 
-        user_key = self._sidebar.current_user if hasattr(self, '_sidebar') else None
-        settings = get_settings(user_key)
+        settings = get_settings()
 
         # Centered container
         center = tk.Frame(settings_inner, bg=p["BG"])
@@ -206,7 +205,7 @@ class SettingsMixin:
                 "show_verification": verify_var.get(),
                 "show_graph": graph_var.get(),
             }
-            save_settings(new_settings, user_key)
+            save_settings(new_settings)
             self._sidebar._apply_settings_to_app(new_settings)
             msg_label.configure(text="✓  Settings saved!", fg=p["SUCCESS"])
             new_p = themes.palette(self._theme)
@@ -223,6 +222,110 @@ class SettingsMixin:
                   activeforeground="#ffffff",
                   bd=0, padx=24, pady=10, cursor="hand2",
                   command=_save).pack(fill=tk.X)
+
+        # ── Data Management card ───────────────────────────────────
+        data_outer = tk.Frame(center, bg=p["STEP_BORDER"], padx=1, pady=1)
+        data_outer.pack(fill=tk.X, pady=(20, 0))
+        data_card = tk.Frame(data_outer, bg=p["STEP_BG"], padx=30, pady=24)
+        data_card.pack(fill=tk.X)
+
+        tk.Label(data_card, text="Data Management", font=section_font,
+                 bg=p["STEP_BG"], fg=p["ACCENT"]).pack(anchor="w", pady=(0, 8))
+
+        tk.Label(data_card, text="Manage your locally stored solve history and settings.",
+                 font=small_font, bg=p["STEP_BG"],
+                 fg=p["TEXT_DIM"]).pack(anchor="w", pady=(0, 12))
+
+        data_msg = tk.Label(data_card, text="", font=small_font,
+                            bg=p["STEP_BG"], fg=p["SUCCESS"])
+        data_msg.pack(anchor="w", pady=(0, 8))
+
+        # ── Clear History button ───────────────────────────────────
+        def _clear_hist():
+            clear_history()
+            data_msg.configure(text="✓  History cleared!", fg=p["SUCCESS"])
+            self.after(3000, lambda: data_msg.configure(text="")
+                       if data_msg.winfo_exists() else None)
+
+        def _confirm_clear_hist():
+            _show_confirm(
+                data_card, data_msg,
+                "Clear all solve history?",
+                "This will permanently delete all history entries.",
+                "Clear History", _clear_hist,
+            )
+
+        btn_font = tkfont.Font(family="Segoe UI", size=13, weight="bold")
+
+        clear_hist_border = tk.Frame(data_card, bg=p["INPUT_BORDER"],
+                                     highlightbackground=p["INPUT_BORDER"],
+                                     highlightthickness=1, bd=0)
+        clear_hist_border.pack(fill=tk.X, pady=3)
+        tk.Button(clear_hist_border, text="🗑  Clear History", font=btn_font,
+                  bg=p["STEP_BG"], fg=p["TEXT_BRIGHT"],
+                  activebackground=p["INPUT_BORDER"],
+                  activeforeground=p["TEXT_BRIGHT"],
+                  bd=0, padx=14, pady=10, cursor="hand2", anchor="w",
+                  command=_confirm_clear_hist).pack(fill=tk.X)
+
+        # ── Reset All Data button ──────────────────────────────────
+        def _reset_all():
+            clear_all_data()
+            self._sidebar._apply_user_settings()
+            data_msg.configure(text="✓  All data reset!", fg=p["SUCCESS"])
+            self.after(1500, lambda: (
+                self._rebuild_settings_with_scroll()
+                if self._settings_visible else None))
+
+        def _confirm_reset():
+            _show_confirm(
+                data_card, data_msg,
+                "Reset all data?",
+                "This will erase all history AND reset settings to defaults.",
+                "Reset Everything", _reset_all,
+                danger=True,
+            )
+
+        reset_border = tk.Frame(data_card, bg=p["ERROR"],
+                                highlightbackground=p["ERROR"],
+                                highlightthickness=1, bd=0)
+        reset_border.pack(fill=tk.X, pady=(8, 3))
+        tk.Button(reset_border, text="⚠  Reset All Data", font=btn_font,
+                  bg=p["STEP_BG"], fg=p["ERROR"],
+                  activebackground=p["ERROR"],
+                  activeforeground="#ffffff",
+                  bd=0, padx=14, pady=10, cursor="hand2", anchor="w",
+                  command=_confirm_reset).pack(fill=tk.X)
+
+        # ── Confirmation helper (inline) ───────────────────────────
+        def _show_confirm(parent, msg_lbl, title, desc, btn_text, action,
+                          danger=False):
+            """Show an inline confirmation prompt."""
+            overlay = tk.Frame(parent, bg=p["STEP_BG"])
+            overlay.pack(fill=tk.X, pady=(12, 0))
+
+            tk.Label(overlay, text=title,
+                     font=tkfont.Font(family="Segoe UI", size=14, weight="bold"),
+                     bg=p["STEP_BG"], fg=p["ERROR"] if danger else p["TEXT_BRIGHT"]
+                     ).pack(anchor="w")
+            tk.Label(overlay, text=desc, font=small_font,
+                     bg=p["STEP_BG"], fg=p["TEXT_DIM"]).pack(anchor="w", pady=(2, 10))
+
+            btn_row = tk.Frame(overlay, bg=p["STEP_BG"])
+            btn_row.pack(anchor="w")
+
+            tk.Button(btn_row, text=btn_text, font=btn_font,
+                      bg=p["ERROR"], fg="#ffffff",
+                      activebackground="#cc0000", activeforeground="#ffffff",
+                      bd=0, padx=16, pady=6, cursor="hand2",
+                      command=lambda: (overlay.destroy(), action())
+                      ).pack(side=tk.LEFT, padx=(0, 8))
+            tk.Button(btn_row, text="Cancel", font=btn_font,
+                      bg=p["STEP_BG"], fg=p["TEXT_DIM"],
+                      activebackground=p["INPUT_BORDER"],
+                      activeforeground=p["TEXT_BRIGHT"],
+                      bd=0, padx=16, pady=6, cursor="hand2",
+                      command=overlay.destroy).pack(side=tk.LEFT)
 
     def _rebuild_settings_with_scroll(self) -> None:
         """Rebuild settings page and restore saved scroll position."""

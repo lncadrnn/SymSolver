@@ -1,20 +1,20 @@
 """
-SymSolver — Local JSON storage for users, history, and settings.
+SymSolver — Local JSON storage for history and settings.
 
 Data is persisted in ``<project>/data/symsolver.json``.
+All data is local — no user accounts required.
 """
 
-import hashlib
 import json
 import os
 import time
+import uuid
 from datetime import datetime
-from typing import Optional
 
 _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
 _DATA_FILE = os.path.join(_DATA_DIR, "symsolver.json")
 
-# ── Default settings (used for guests and new accounts) ─────────────────
+# ── Default settings ────────────────────────────────────────────────────
 DEFAULT_SETTINGS = {
     "theme": "dark",
     "animation_speed": "normal",   # "slow", "normal", "fast", "instant"
@@ -32,10 +32,17 @@ def _load_db() -> dict:
     if os.path.exists(_DATA_FILE):
         try:
             with open(_DATA_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+                # Migrate old format if needed
+                if "users" in data and "history" not in data:
+                    data = {
+                        "settings": data.get("guest_settings", dict(DEFAULT_SETTINGS)),
+                        "history": [],
+                    }
+                return data
         except (json.JSONDecodeError, OSError):
             pass
-    return {"users": {}, "guest_settings": dict(DEFAULT_SETTINGS)}
+    return {"settings": dict(DEFAULT_SETTINGS), "history": []}
 
 
 def _save_db(db: dict) -> None:
@@ -44,111 +51,97 @@ def _save_db(db: dict) -> None:
         json.dump(db, f, indent=2, ensure_ascii=False)
 
 
-def _hash_pw(password: str) -> str:
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
-
-
-# ── User management ─────────────────────────────────────────────────────
-
-def register_user(username: str, password: str) -> tuple[bool, str]:
-    """Create a new account. Returns (success, message)."""
-    username = username.strip()
-    if not username:
-        return False, "Username cannot be empty."
-    if len(username) < 3:
-        return False, "Username must be at least 3 characters."
-    if len(password) < 4:
-        return False, "Password must be at least 4 characters."
-    db = _load_db()
-    key = username.lower()
-    if key in db["users"]:
-        return False, "Username already taken."
-    db["users"][key] = {
-        "display_name": username,
-        "password_hash": _hash_pw(password),
-        "settings": dict(DEFAULT_SETTINGS),
-        "history": [],
-    }
-    _save_db(db)
-    return True, "Account created successfully!"
-
-
-def login_user(username: str, password: str) -> tuple[bool, str]:
-    """Validate credentials. Returns (success, message)."""
-    db = _load_db()
-    key = username.strip().lower()
-    user = db["users"].get(key)
-    if not user:
-        return False, "User not found."
-    if user["password_hash"] != _hash_pw(password):
-        return False, "Incorrect password."
-    return True, user["display_name"]
-
-
 # ── Settings ─────────────────────────────────────────────────────────────
 
-def get_settings(username: Optional[str] = None) -> dict:
-    """Return settings dict. If *username* is None, return guest settings."""
+def get_settings() -> dict:
+    """Return the settings dict."""
     db = _load_db()
-    if username:
-        key = username.strip().lower()
-        user = db["users"].get(key)
-        if user:
-            # Merge with defaults so new keys are always present
-            merged = dict(DEFAULT_SETTINGS)
-            merged.update(user.get("settings", {}))
-            return merged
-    return dict(db.get("guest_settings", DEFAULT_SETTINGS))
+    merged = dict(DEFAULT_SETTINGS)
+    merged.update(db.get("settings", {}))
+    return merged
 
 
-def save_settings(settings: dict, username: Optional[str] = None) -> None:
-    """Persist settings for the given user (or guest)."""
+def save_settings(settings: dict) -> None:
+    """Persist settings."""
     db = _load_db()
-    if username:
-        key = username.strip().lower()
-        if key in db["users"]:
-            db["users"][key]["settings"] = settings
-    else:
-        db["guest_settings"] = settings
+    db["settings"] = settings
     _save_db(db)
 
 
 # ── History ──────────────────────────────────────────────────────────────
 
-def add_history(username: str, equation: str, answer: str) -> None:
-    """Append a solve record to the user's history."""
+def add_history(equation: str, answer: str) -> str:
+    """Append a solve record to history. Returns the new record's ID."""
     db = _load_db()
-    key = username.strip().lower()
-    user = db["users"].get(key)
-    if not user:
-        return
+    record_id = uuid.uuid4().hex[:12]
     record = {
+        "id": record_id,
         "equation": equation,
         "answer": answer,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "epoch": time.time(),
+        "pinned": False,
+        "archived": False,
     }
-    user.setdefault("history", []).insert(0, record)  # newest first
-    # Keep last 100 entries
-    user["history"] = user["history"][:100]
+    db.setdefault("history", []).insert(0, record)  # newest first
+    # Keep last 200 entries
+    db["history"] = db["history"][:200]
+    _save_db(db)
+    return record_id
+
+
+def get_history(include_archived: bool = False) -> list[dict]:
+    """Return history list (newest first). Excludes archived by default."""
+    db = _load_db()
+    history = db.get("history", [])
+    if not include_archived:
+        history = [r for r in history if not r.get("archived", False)]
+    return history
+
+
+def get_archived_history() -> list[dict]:
+    """Return only archived history entries."""
+    db = _load_db()
+    return [r for r in db.get("history", []) if r.get("archived", False)]
+
+
+def delete_history_item(record_id: str) -> None:
+    """Delete a single history entry by ID."""
+    db = _load_db()
+    db["history"] = [r for r in db.get("history", []) if r.get("id") != record_id]
     _save_db(db)
 
 
-def get_history(username: str) -> list[dict]:
-    """Return the user's history list (newest first)."""
+def toggle_pin(record_id: str) -> bool:
+    """Toggle the pinned state of a history entry. Returns new pinned state."""
     db = _load_db()
-    key = username.strip().lower()
-    user = db["users"].get(key)
-    if not user:
-        return []
-    return user.get("history", [])
+    for r in db.get("history", []):
+        if r.get("id") == record_id:
+            r["pinned"] = not r.get("pinned", False)
+            _save_db(db)
+            return r["pinned"]
+    return False
 
 
-def clear_history(username: str) -> None:
-    """Remove all history entries for a user."""
+def toggle_archive(record_id: str) -> bool:
+    """Toggle the archived state of a history entry. Returns new archived state."""
     db = _load_db()
-    key = username.strip().lower()
-    user = db["users"].get(key)
-    if user:
-        user["history"] = []
-        _save_db(db)
+    for r in db.get("history", []):
+        if r.get("id") == record_id:
+            r["archived"] = not r.get("archived", False)
+            _save_db(db)
+            return r["archived"]
+    return False
+
+
+def clear_history() -> None:
+    """Remove all history entries."""
+    db = _load_db()
+    db["history"] = []
+    _save_db(db)
+
+
+def clear_all_data() -> None:
+    """Reset everything — settings and history."""
+    db = {"settings": dict(DEFAULT_SETTINGS), "history": []}
+    _save_db(db)

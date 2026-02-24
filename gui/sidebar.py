@@ -1,18 +1,19 @@
 """
 SymSolver — Sidebar panel (hamburger menu).
 
-Provides login/register, settings (all users), and history (logged-in only).
-The sidebar overlays on top of the main content with a dimmed backdrop.
+ChatGPT-style sidebar with history logs, settings link, and three-dot menus.
+No login/register — all history is stored locally for everyone.
 """
 
+import time
 import tkinter as tk
-from tkinter import font as tkfont
-from typing import Optional
+from tkinter import ttk, font as tkfont
 
 from gui.storage import (
-    register_user, login_user,
     get_settings, save_settings,
-    get_history, clear_history, add_history,
+    get_history, get_archived_history,
+    clear_history, add_history,
+    delete_history_item, toggle_pin, toggle_archive,
     DEFAULT_SETTINGS,
 )
 
@@ -24,11 +25,9 @@ _SIDEBAR_W = 340
 class Sidebar:
     """Manages the slide-in sidebar overlay with dimmed backdrop."""
 
-    def __init__(self, app: "SymSolverApp") -> None:  # type: ignore[name-defined]
+    def __init__(self, app) -> None:
         self.app = app
         self._open = False
-        self._current_user: Optional[str] = None  # display name (None = guest)
-        self._current_user_key: Optional[str] = None  # lowercase key
 
         # ── Fonts ────────────────────────────────────────────────────────
         self._font       = tkfont.Font(family="Segoe UI", size=13)
@@ -37,34 +36,51 @@ class Sidebar:
         self._font_title = tkfont.Font(family="Segoe UI", size=16, weight="bold")
         self._font_icon  = tkfont.Font(family="Segoe UI", size=18)
         self._font_hist  = tkfont.Font(family="Consolas", size=12)
+        self._font_dots  = tkfont.Font(family="Segoe UI", size=14, weight="bold")
+        self._font_menu  = tkfont.Font(family="Segoe UI", size=12)
 
         # ── Backdrop — dark overlay behind sidebar ───────────────────────
         self._backdrop = tk.Frame(app, bg="#000000")
-        # Not placed yet — shown on open
 
         # ── Sidebar panel — overlays on top using place() ────────────────
         self._panel = tk.Frame(app, width=_SIDEBAR_W, bg="#050505")
-        self._panel.place_forget()  # hidden initially
+        self._panel.place_forget()
         self._panel.pack_propagate(False)
 
-        # inner scrollable area
-        self._canvas = tk.Canvas(self._panel, highlightthickness=0, width=_SIDEBAR_W)
+        # inner scrollable area + scrollbar
+        self._sb_style_name = "Sidebar.Vertical.TScrollbar"
+        self._style = ttk.Style()
+        self._update_sidebar_scrollbar_style()
+
+        # Use grid so canvas + scrollbar coexist reliably inside place()'d panel
+        self._panel.grid_rowconfigure(0, weight=1)
+        self._panel.grid_columnconfigure(0, weight=1)
+        self._panel.grid_columnconfigure(1, weight=0)
+
+        self._canvas = tk.Canvas(self._panel, highlightthickness=0)
+        self._scrollbar = ttk.Scrollbar(
+            self._panel, orient=tk.VERTICAL,
+            command=self._canvas.yview,
+            style=self._sb_style_name,
+        )
         self._inner = tk.Frame(self._canvas)
         self._canvas.create_window((0, 0), window=self._inner, anchor="nw",
                                    tags="inner")
-        self._canvas.pack(fill=tk.BOTH, expand=True)
-        self._inner.bind("<Configure>",
-                         lambda _: self._canvas.configure(
-                             scrollregion=self._canvas.bbox("all")))
-        self._canvas.bind("<Configure>",
-                          lambda e: self._canvas.itemconfig("inner", width=e.width))
+        self._canvas.configure(yscrollcommand=self._scrollbar.set)
 
-        # Fixed account bar at the very bottom (outside scrollable area)
-        self._account_bar = tk.Frame(self._panel, bg="#050505")
-        # Not packed yet — built dynamically on open
+        self._canvas.grid(row=0, column=0, sticky="nsew")
+        # scrollbar starts hidden — shown only when content overflows
+        self._inner.bind("<Configure>", self._update_sidebar_scroll)
+        self._canvas.bind("<Configure>",
+                          lambda e: (self._canvas.itemconfig("inner",
+                                      width=e.width),
+                                     self._update_sidebar_scroll()))
 
         # Track current "page" inside sidebar
-        self._page = "main"  # "main" | "login" | "register" | "history" | "settings"
+        self._page = "main"  # "main" | "history" | "archived"
+
+        # Active popup menu ref (so we can close it)
+        self._popup_menu = None
 
         self._build_colours()
 
@@ -101,16 +117,53 @@ class Sidebar:
         self._panel.configure(bg=c["bg"])
         self._canvas.configure(bg=c["bg"])
         self._inner.configure(bg=c["bg"])
-        self._account_bar.configure(bg=c["bg"])
+        self._update_sidebar_scrollbar_style()
+
+    def _update_sidebar_scrollbar_style(self) -> None:
+        """Style the sidebar scrollbar to match the current theme."""
+        from gui.themes import DARK_PALETTE, LIGHT_PALETTE
+        p = DARK_PALETTE if self.app._theme == "dark" else LIGHT_PALETTE
+        bg  = p["BG_DARKER"]
+        sbg = p["SCROLLBAR_BG"]
+        sac = p["SCROLLBAR_ACT"]
+        self._style.configure(
+            self._sb_style_name,
+            background=sbg, troughcolor=bg,
+            bordercolor=bg, arrowcolor=sbg,
+            relief=tk.FLAT, borderwidth=0,
+        )
+        self._style.map(
+            self._sb_style_name,
+            background=[("active", sac), ("!active", sbg)],
+        )
+        self._style.layout(self._sb_style_name, [
+            ("Vertical.Scrollbar.trough", {
+                "sticky": "ns",
+                "children": [
+                    ("Vertical.Scrollbar.thumb", {"expand": 1, "sticky": "nswe"})
+                ]
+            })
+        ])
+
+    def _update_sidebar_scroll(self, _event=None) -> None:
+        """Show/hide the scrollbar depending on whether content overflows."""
+        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
+        self._canvas.update_idletasks()
+        content_h = self._inner.winfo_reqheight()
+        canvas_h = self._canvas.winfo_height()
+        if content_h <= canvas_h:
+            self._scrollbar.grid_remove()
+        else:
+            self._scrollbar.grid(row=0, column=1, sticky="ns")
 
     # ── Scrolling ───────────────────────────────────────────────────────
 
     def _on_scroll(self, event: tk.Event) -> None:
         if self._open:
             self._canvas.yview_scroll(int(-event.delta / 120), "units")
-            return "break"  # consume event so main chat doesn't scroll
+            return "break"
 
-    # ── Open / Close (instant overlay) ──────────────────────────────────
+    # ── Open / Close ────────────────────────────────────────────────────
 
     @property
     def is_open(self) -> bool:
@@ -132,28 +185,31 @@ class Sidebar:
         self._page = "main"
         self._render_page()
 
-        # Show backdrop (dark overlay) then sidebar on top
-        self._backdrop.place(x=0, y=0, relwidth=1, relheight=1)
         _dim = "#b0b4ba" if self.app._theme == "light" else "#1a1a1a"
+        self._backdrop.place(x=0, y=0, relwidth=1, relheight=1)
         self._backdrop.configure(bg=_dim)
         self._backdrop.lift()
         self._panel.place(x=0, y=0, width=_SIDEBAR_W, relheight=1)
         self._panel.lift()
 
-        # Bind backdrop click to close
         self._backdrop.bind("<Button-1>", lambda e: self.close())
-        # Bind mousewheel on sidebar canvas
         self._canvas.bind("<MouseWheel>", self._on_scroll)
 
     def close(self) -> None:
         if not self._open:
             return
         self._open = False
+        self._close_popup()
         self._panel.place_forget()
         self._backdrop.place_forget()
         self._canvas.unbind("<MouseWheel>")
         self._clear_inner()
-        self._clear_account_bar()
+
+    def _close_popup(self) -> None:
+        """Destroy any open three-dot popup menu."""
+        if self._popup_menu and self._popup_menu.winfo_exists():
+            self._popup_menu.destroy()
+        self._popup_menu = None
 
     # ── Page rendering ──────────────────────────────────────────────────
 
@@ -161,38 +217,30 @@ class Sidebar:
         for w in self._inner.winfo_children():
             w.destroy()
 
-    def _clear_account_bar(self) -> None:
-        for w in self._account_bar.winfo_children():
-            w.destroy()
-        self._account_bar.pack_forget()
-
     def _render_page(self) -> None:
         self._clear_inner()
-        self._clear_account_bar()
+        self._close_popup()
         c = self.c
         self._inner.configure(bg=c["bg"])
 
         if self._page == "main":
             self._render_main()
-        elif self._page == "login":
-            self._render_login()
-        elif self._page == "register":
-            self._render_register()
         elif self._page == "history":
-            self._render_history()
+            self._render_full_history()
+        elif self._page == "archived":
+            self._render_archived()
 
         self._canvas.yview_moveto(0)
 
-    # ── Main page ───────────────────────────────────────────────────────
+    # ── Main page (ChatGPT-style) ──────────────────────────────────────
 
     def _render_main(self) -> None:
         c = self.c
 
-        # Top row: logo (left) + close button (right), vertically centred
+        # Top row: logo + close button
         top = tk.Frame(self._inner, bg=c["bg"])
         top.pack(fill=tk.X, padx=12, pady=(14, 0))
 
-        # Logo on the left
         try:
             import os
             from PIL import Image, ImageTk
@@ -214,247 +262,244 @@ class Sidebar:
             tk.Label(top, text="SymSolver", font=self._font_title,
                      bg=c["bg"], fg=c["accent"]).pack(side=tk.LEFT)
 
-        # Close button on the right
         tk.Button(top, text="✕", font=self._font_icon, bg=c["bg"], fg=c["dim"],
                   activebackground=c["bg"], activeforeground=c["fg"],
                   bd=0, cursor="hand2", command=self.close).pack(side=tk.RIGHT)
 
-        # Menu items (top section)
+        # ── Menu items ───────────────────────────────────────────────
         menu = tk.Frame(self._inner, bg=c["bg"])
         menu.pack(fill=tk.X, padx=12, pady=(10, 0))
 
-        if self._current_user:
-            self._make_menu_button(menu, "📋  History", lambda: self._go_page("history"))
-
-        self._make_menu_button(menu, "💬  SymSolver", self._go_chat)
+        self._make_menu_button(menu, "💬  SymSolver", self._new_chat)
         self._make_menu_button(menu, "⚙  Settings", self._open_settings)
+        self._make_menu_button(menu, "📦  Archived", lambda: self._go_page("archived"))
 
-        # Divider below settings
+        # Divider
         self._divider()
 
-        # Below the divider: history list or prompt to log in
-        if self._current_user:
-            history = get_history(self._current_user_key)
-            if history:
-                for i, rec in enumerate(history[:5]):  # show last 5
-                    self._render_history_item(rec, i)
-                if len(history) > 5:
-                    tk.Label(self._inner, text=f"+ {len(history) - 5} more...",
-                             font=self._font_small, bg=c["bg"], fg=c["dim"],
-                             cursor="hand2").pack(anchor="w", padx=20, pady=(4, 0))
-            else:
-                tk.Label(self._inner, text="No history yet",
-                         font=self._font_small, bg=c["bg"],
-                         fg=c["dim"]).pack(pady=(10, 0))
-        else:
-            tk.Label(self._inner, text="Log in to save history",
+        # ── History section ──────────────────────────────────────────
+        history = get_history(include_archived=False)
+
+        if not history:
+            empty_frame = tk.Frame(self._inner, bg=c["bg"])
+            empty_frame.pack(fill=tk.X, padx=20, pady=(20, 0))
+            tk.Label(empty_frame, text="No history yet",
                      font=self._font_small, bg=c["bg"],
-                     fg=c["dim"]).pack(pady=(10, 0))
-
-        # ── Fixed account bar at the bottom of the panel ────────────────
-        self._build_account_bar()
-    def _build_account_bar(self) -> None:
-        """Build the fixed account section at the very bottom of the panel."""
-        c = self.c
-        bar = self._account_bar
-        bar.configure(bg=c["bg"])
-
-        # Divider line at top of account bar
-        tk.Frame(bar, bg=c["border"], height=1).pack(fill=tk.X, padx=16)
-
-        content = tk.Frame(bar, bg=c["bg"])
-        content.pack(fill=tk.X, padx=16, pady=(10, 14))
-
-        if self._current_user:
-            # Logged-in row: avatar + name + logout
-            row = tk.Frame(content, bg=c["bg"])
-            row.pack(fill=tk.X)
-
-            tk.Label(row, text="👤", font=self._font_icon,
-                     bg=c["bg"], fg=c["accent"]).pack(side=tk.LEFT, padx=(0, 8))
-
-            name_block = tk.Frame(row, bg=c["bg"])
-            name_block.pack(side=tk.LEFT, fill=tk.X, expand=True)
-            tk.Label(name_block, text=self._current_user, font=self._font_bold,
-                     bg=c["bg"], fg=c["fg"], anchor="w").pack(fill=tk.X)
-            tk.Label(name_block, text="Logged in", font=self._font_small,
-                     bg=c["bg"], fg=c["success"], anchor="w").pack(fill=tk.X)
-
-            tk.Button(row, text="↪", font=self._font_icon,
-                      bg=c["bg"], fg=c["error"],
-                      activebackground=c["bg"], activeforeground=c["error"],
-                      bd=0, cursor="hand2",
-                      command=self._logout).pack(side=tk.RIGHT)
+                     fg=c["dim"]).pack(anchor="w")
+            tk.Label(empty_frame, text="Solved equations will appear here.",
+                     font=self._font_small, bg=c["bg"],
+                     fg=c["border"]).pack(anchor="w", pady=(2, 0))
         else:
-            # Guest row: avatar + Guest label (vertically centred)
-            row = tk.Frame(content, bg=c["bg"])
-            row.pack(fill=tk.X)
+            # Separate pinned and regular
+            pinned = [r for r in history if r.get("pinned", False)]
+            regular = [r for r in history if not r.get("pinned", False)]
 
-            tk.Label(row, text="👤", font=self._font_icon,
-                     bg=c["bg"], fg=c["dim"]).pack(side=tk.LEFT, padx=(0, 8))
-            tk.Label(row, text="Guest", font=self._font_bold,
-                     bg=c["bg"], fg=c["fg"]).pack(side=tk.LEFT)
+            # ── Pinned section ───────────────────────────────────────
+            if pinned:
+                lbl_frame = tk.Frame(self._inner, bg=c["bg"])
+                lbl_frame.pack(fill=tk.X, padx=20, pady=(6, 2))
+                tk.Label(lbl_frame, text="📌  Pinned", font=self._font_small,
+                         bg=c["bg"], fg=c["dim"]).pack(anchor="w")
+                for rec in pinned:
+                    self._render_history_card(rec)
 
-            btn_row = tk.Frame(content, bg=c["bg"])
-            btn_row.pack(fill=tk.X, pady=(6, 0))
-            self._make_accent_button(btn_row, "Log In",
-                                     lambda: self._go_page("login"),
-                                     small=True)
-            self._make_outline_button(btn_row, "Register",
-                                      lambda: self._go_page("register"),
-                                      small=True)
+                if regular:
+                    self._divider()
 
-        # Pack the bar at the bottom of the panel (below the canvas)
-        bar.pack(side=tk.BOTTOM, fill=tk.X)
-    # ── Login page ──────────────────────────────────────────────────────
+            # ── Regular (grouped by time) ────────────────────────────
+            if regular:
+                groups = self._group_by_time(regular)
+                for label, items in groups:
+                    lbl_frame = tk.Frame(self._inner, bg=c["bg"])
+                    lbl_frame.pack(fill=tk.X, padx=20, pady=(8, 2))
+                    tk.Label(lbl_frame, text=label, font=self._font_small,
+                             bg=c["bg"], fg=c["dim"]).pack(anchor="w")
+                    for rec in items:
+                        self._render_history_card(rec)
 
-    def _render_login(self) -> None:
-        c = self.c
-        self._back_header("Log In")
+            # ── View all link ────────────────────────────────────────
+            if len(history) > 20:
+                link_frame = tk.Frame(self._inner, bg=c["bg"])
+                link_frame.pack(fill=tk.X, padx=20, pady=(10, 4))
+                self._make_link_button(link_frame, "View all history →",
+                                       lambda: self._go_page("history"))
 
-        form = tk.Frame(self._inner, bg=c["bg"])
-        form.pack(fill=tk.X, padx=20, pady=(20, 0))
+        # Bottom padding
+        tk.Frame(self._inner, bg=c["bg"], height=20).pack()
 
-        tk.Label(form, text="Username", font=self._font_bold, bg=c["bg"],
-                 fg=c["fg"]).pack(anchor="w", pady=(0, 4))
-        user_entry = tk.Entry(form, font=self._font, bg=c["input_bg"],
-                              fg=c["fg"], insertbackground=c["fg"],
-                              highlightbackground=c["input_bd"],
-                              highlightthickness=1, bd=0, relief=tk.FLAT)
-        user_entry.pack(fill=tk.X, ipady=8)
+    # ── Time grouping helper ────────────────────────────────────────────
 
-        tk.Label(form, text="Password", font=self._font_bold, bg=c["bg"],
-                 fg=c["fg"]).pack(anchor="w", pady=(14, 4))
-        pass_entry = tk.Entry(form, font=self._font, bg=c["input_bg"],
-                              fg=c["fg"], insertbackground=c["fg"],
-                              show="•",
-                              highlightbackground=c["input_bd"],
-                              highlightthickness=1, bd=0, relief=tk.FLAT)
-        pass_entry.pack(fill=tk.X, ipady=8)
+    @staticmethod
+    def _group_by_time(records: list[dict]) -> list[tuple[str, list[dict]]]:
+        """Group records into Today, Yesterday, Previous 7 Days, Earlier."""
+        now = time.time()
+        today_start = now - (now % 86400)  # approximate
+        yesterday_start = today_start - 86400
+        week_start = today_start - 7 * 86400
 
-        msg_label = tk.Label(form, text="", font=self._font_small, bg=c["bg"],
-                             fg=c["error"], wraplength=280, justify=tk.LEFT)
-        msg_label.pack(anchor="w", pady=(10, 0))
-
-        def _do_login():
-            u, p = user_entry.get().strip(), pass_entry.get()
-            ok, result = login_user(u, p)
-            if ok:
-                self._current_user = result  # display_name
-                self._current_user_key = u.lower()
-                # Load user settings
-                self._apply_user_settings()
-                self._page = "main"
-                self._render_page()
+        groups: dict[str, list[dict]] = {
+            "Today": [],
+            "Yesterday": [],
+            "Previous 7 Days": [],
+            "Earlier": [],
+        }
+        for r in records:
+            epoch = r.get("epoch", 0)
+            if epoch >= today_start:
+                groups["Today"].append(r)
+            elif epoch >= yesterday_start:
+                groups["Yesterday"].append(r)
+            elif epoch >= week_start:
+                groups["Previous 7 Days"].append(r)
             else:
-                msg_label.configure(text=result, fg=c["error"])
+                groups["Earlier"].append(r)
 
-        btn_frame = tk.Frame(form, bg=c["bg"])
-        btn_frame.pack(fill=tk.X, pady=(16, 0))
-        self._make_accent_button(btn_frame, "Log In", _do_login, fill=True)
+        result = []
+        for key in ("Today", "Yesterday", "Previous 7 Days", "Earlier"):
+            if groups[key]:
+                result.append((key, groups[key]))
+        return result
 
-        tk.Label(form, text="Don't have an account?", font=self._font_small,
-                 bg=c["bg"], fg=c["dim"]).pack(anchor="w", pady=(20, 2))
-        self._make_link_button(form, "Create one here",
-                               lambda: self._go_page("register"))
+    # ── History card with three-dot menu ────────────────────────────────
 
-        user_entry.focus_set()
-
-        # Bind Enter to login
-        def _enter(e):
-            _do_login()
-        pass_entry.bind("<Return>", _enter)
-        user_entry.bind("<Return>", lambda e: pass_entry.focus_set())
-
-    # ── Register page ───────────────────────────────────────────────────
-
-    def _render_register(self) -> None:
+    def _render_history_card(self, rec: dict) -> None:
         c = self.c
-        self._back_header("Create Account")
+        record_id = rec.get("id", "")
 
-        form = tk.Frame(self._inner, bg=c["bg"])
-        form.pack(fill=tk.X, padx=20, pady=(20, 0))
+        card = tk.Frame(self._inner, bg=c["card"],
+                        highlightbackground=c["border"],
+                        highlightthickness=1)
+        card.pack(fill=tk.X, padx=16, pady=(3, 1))
 
-        tk.Label(form, text="Username", font=self._font_bold, bg=c["bg"],
-                 fg=c["fg"]).pack(anchor="w", pady=(0, 4))
-        user_entry = tk.Entry(form, font=self._font, bg=c["input_bg"],
-                              fg=c["fg"], insertbackground=c["fg"],
-                              highlightbackground=c["input_bd"],
-                              highlightthickness=1, bd=0, relief=tk.FLAT)
-        user_entry.pack(fill=tk.X, ipady=8)
+        inner = tk.Frame(card, bg=c["card"], padx=10, pady=6)
+        inner.pack(fill=tk.X)
 
-        tk.Label(form, text="Password", font=self._font_bold, bg=c["bg"],
-                 fg=c["fg"]).pack(anchor="w", pady=(14, 4))
-        pass_entry = tk.Entry(form, font=self._font, bg=c["input_bg"],
-                              fg=c["fg"], insertbackground=c["fg"],
-                              show="•",
-                              highlightbackground=c["input_bd"],
-                              highlightthickness=1, bd=0, relief=tk.FLAT)
-        pass_entry.pack(fill=tk.X, ipady=8)
+        # Top row: equation + three-dot button
+        top_row = tk.Frame(inner, bg=c["card"])
+        top_row.pack(fill=tk.X)
 
-        tk.Label(form, text="Confirm Password", font=self._font_bold,
-                 bg=c["bg"], fg=c["fg"]).pack(anchor="w", pady=(14, 4))
-        conf_entry = tk.Entry(form, font=self._font, bg=c["input_bg"],
-                              fg=c["fg"], insertbackground=c["fg"],
-                              show="•",
-                              highlightbackground=c["input_bd"],
-                              highlightthickness=1, bd=0, relief=tk.FLAT)
-        conf_entry.pack(fill=tk.X, ipady=8)
+        eq_text = rec.get("equation", "?")
+        if len(eq_text) > 32:
+            eq_text = eq_text[:29] + "…"
 
-        msg_label = tk.Label(form, text="", font=self._font_small, bg=c["bg"],
-                             fg=c["error"], wraplength=280, justify=tk.LEFT)
-        msg_label.pack(anchor="w", pady=(10, 0))
+        pin_prefix = "📌 " if rec.get("pinned", False) else ""
+        eq_label = tk.Label(top_row, text=pin_prefix + eq_text,
+                            font=self._font_hist, bg=c["card"],
+                            fg=c["accent"], anchor="w", cursor="hand2")
+        eq_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        def _do_register():
-            u = user_entry.get().strip()
-            p = pass_entry.get()
-            cp = conf_entry.get()
-            if p != cp:
-                msg_label.configure(text="Passwords do not match.", fg=c["error"])
-                return
-            ok, result = register_user(u, p)
-            if ok:
-                msg_label.configure(text=result, fg=c["success"])
-                # Auto-login after short delay
-                self.app.after(800, lambda: self._auto_login_after_register(u, p))
-            else:
-                msg_label.configure(text=result, fg=c["error"])
+        # Three-dot menu button
+        dots_btn = tk.Button(
+            top_row, text="⋮", font=self._font_dots,
+            bg=c["card"], fg=c["dim"],
+            activebackground=c["card"], activeforeground=c["fg"],
+            bd=0, padx=4, pady=0, cursor="hand2",
+            command=lambda rid=record_id, btn=None: None,
+        )
+        dots_btn.pack(side=tk.RIGHT)
+        dots_btn.configure(
+            command=lambda rid=record_id, b=dots_btn: self._show_popup(rid, b, rec))
 
-        btn_frame = tk.Frame(form, bg=c["bg"])
-        btn_frame.pack(fill=tk.X, pady=(16, 0))
-        self._make_accent_button(btn_frame, "Create Account", _do_register,
-                                 fill=True)
+        # Timestamp — tight below equation, readable colour per theme
+        ts = rec.get("timestamp", "")
+        ts_fg = c["fg"]  # white in dark mode, black in light mode
+        tk.Label(inner, text=ts, font=self._font_small, bg=c["card"],
+                 fg=ts_fg, anchor="w").pack(fill=tk.X, pady=(0, 0))
 
-        tk.Label(form, text="Already have an account?", font=self._font_small,
-                 bg=c["bg"], fg=c["dim"]).pack(anchor="w", pady=(20, 2))
-        self._make_link_button(form, "Log in here",
-                               lambda: self._go_page("login"))
+        # Click card to re-solve
+        eq_full = rec.get("equation", "")
 
-        user_entry.focus_set()
-        conf_entry.bind("<Return>", lambda e: _do_register())
+        def _use(eq=eq_full):
+            self.close()
+            self.app._entry.delete(0, tk.END)
+            self.app._entry.insert(0, eq)
+            self.app._on_send()
 
-    def _auto_login_after_register(self, username: str, password: str) -> None:
-        ok, result = login_user(username, password)
-        if ok:
-            self._current_user = result
-            self._current_user_key = username.lower()
-            self._apply_user_settings()
-            self._page = "main"
-            self._render_page()
+        for widget in (card, inner, eq_label):
+            widget.bind("<Button-1>", lambda e: _use())
 
-    # ── History page ────────────────────────────────────────────────────
+    # ── Three-dot popup menu ────────────────────────────────────────────
 
-    def _render_history(self) -> None:
+    def _show_popup(self, record_id: str, anchor_widget: tk.Widget,
+                    rec: dict) -> None:
+        """Show a popup context menu near the three-dot button."""
+        self._close_popup()
+        c = self.c
+
+        popup = tk.Toplevel(self.app)
+        popup.overrideredirect(True)
+        popup.configure(bg=c["border"])
+        self._popup_menu = popup
+
+        inner_frame = tk.Frame(popup, bg=c["card"], padx=1, pady=1)
+        inner_frame.pack(fill=tk.BOTH, expand=True)
+
+        is_pinned = rec.get("pinned", False)
+        is_archived = rec.get("archived", False)
+
+        items = []
+        items.append((
+            "📌  Unpin" if is_pinned else "📌  Pin",
+            lambda: self._action_pin(record_id),
+        ))
+        items.append((
+            "📦  Unarchive" if is_archived else "📦  Archive",
+            lambda: self._action_archive(record_id),
+        ))
+        items.append(("🗑  Delete", lambda: self._action_delete(record_id)))
+
+        for text, cmd in items:
+            fg_color = c["error"] if "Delete" in text else c["fg"]
+            btn = tk.Button(
+                inner_frame, text=text, font=self._font_menu,
+                bg=c["card"], fg=fg_color,
+                activebackground=c["border"], activeforeground=c["fg"],
+                bd=0, anchor="w", padx=14, pady=6, cursor="hand2",
+                command=lambda fn=cmd: (fn(), self._close_popup()),
+            )
+            btn.pack(fill=tk.X)
+            btn.bind("<Enter>", lambda e, b=btn: b.configure(bg=c["border"]))
+            btn.bind("<Leave>", lambda e, b=btn: b.configure(bg=c["card"]))
+
+        # Position popup near the anchor widget
+        popup.update_idletasks()
+        x = anchor_widget.winfo_rootx() - popup.winfo_reqwidth() + anchor_widget.winfo_width()
+        y = anchor_widget.winfo_rooty() + anchor_widget.winfo_height()
+        popup.geometry(f"+{x}+{y}")
+
+        # Close popup when clicking elsewhere
+        def _on_click_outside(e):
+            try:
+                if popup.winfo_exists():
+                    w = e.widget
+                    if w != popup and w.master != inner_frame:
+                        self._close_popup()
+            except Exception:
+                self._close_popup()
+
+        popup.bind("<FocusOut>", lambda e: self._close_popup())
+        self.app.bind("<Button-1>", _on_click_outside, add="+")
+        popup.after(100, lambda: popup.focus_force() if popup.winfo_exists() else None)
+
+    def _action_pin(self, record_id: str) -> None:
+        toggle_pin(record_id)
+        self._render_page()
+
+    def _action_archive(self, record_id: str) -> None:
+        toggle_archive(record_id)
+        self._render_page()
+
+    def _action_delete(self, record_id: str) -> None:
+        delete_history_item(record_id)
+        self._render_page()
+
+    # ── Full history page ───────────────────────────────────────────────
+
+    def _render_full_history(self) -> None:
         c = self.c
         self._back_header("History")
 
-        if not self._current_user_key:
-            tk.Label(self._inner, text="Log in to view history.",
-                     font=self._font, bg=c["bg"], fg=c["dim"]).pack(
-                         padx=20, pady=40)
-            return
-
-        history = get_history(self._current_user_key)
+        history = get_history(include_archived=False)
 
         if not history:
             empty = tk.Frame(self._inner, bg=c["bg"])
@@ -468,7 +513,7 @@ class Sidebar:
                      fg=c["border"]).pack()
             return
 
-        # Clear history button
+        # Clear all button
         top_actions = tk.Frame(self._inner, bg=c["bg"])
         top_actions.pack(fill=tk.X, padx=20, pady=(10, 4))
         tk.Button(top_actions, text="🗑 Clear All", font=self._font_small,
@@ -477,56 +522,44 @@ class Sidebar:
                   bd=0, cursor="hand2",
                   command=self._confirm_clear_history).pack(side=tk.RIGHT)
 
-        # History list
-        for i, rec in enumerate(history):
-            self._render_history_item(rec, i)
+        archived = get_archived_history()
+        if archived:
+            tk.Button(top_actions, text=f"📦 Archived ({len(archived)})",
+                      font=self._font_small,
+                      bg=c["bg"], fg=c["accent"],
+                      activebackground=c["bg"], activeforeground=c["accent_h"],
+                      bd=0, cursor="hand2",
+                      command=lambda: self._go_page("archived")).pack(side=tk.LEFT)
 
-    def _render_history_item(self, rec: dict, index: int) -> None:
+        for rec in history:
+            self._render_history_card(rec)
+
+    # ── Archived page ───────────────────────────────────────────────────
+
+    def _render_archived(self) -> None:
         c = self.c
-        card = tk.Frame(self._inner, bg=c["card"],
-                        highlightbackground=c["border"],
-                        highlightthickness=1)
-        card.pack(fill=tk.X, padx=16, pady=(4, 2))
+        self._back_header("Archived")
 
-        inner = tk.Frame(card, bg=c["card"], padx=12, pady=10)
-        inner.pack(fill=tk.X)
+        archived = get_archived_history()
 
-        # Equation
-        eq_text = rec.get("equation", "?")
-        if len(eq_text) > 38:
-            eq_text = eq_text[:35] + "…"
-        tk.Label(inner, text=eq_text, font=self._font_hist, bg=c["card"],
-                 fg=c["accent"], anchor="w", cursor="hand2").pack(fill=tk.X)
+        if not archived:
+            empty = tk.Frame(self._inner, bg=c["bg"])
+            empty.pack(fill=tk.X, padx=20, pady=(40, 0))
+            tk.Label(empty, text="📦", font=tkfont.Font(family="Segoe UI", size=32),
+                     bg=c["bg"], fg=c["dim"]).pack()
+            tk.Label(empty, text="No archived items", font=self._font_bold,
+                     bg=c["bg"], fg=c["dim"]).pack(pady=(8, 2))
+            tk.Label(empty, text="Archived equations will appear here.",
+                     font=self._font_small, bg=c["bg"],
+                     fg=c["border"]).pack()
+            return
 
-        # Answer (truncated)
-        ans_text = rec.get("answer", "")
-        first_line = ans_text.split("\n")[0] if ans_text else ""
-        if len(first_line) > 44:
-            first_line = first_line[:41] + "…"
-        tk.Label(inner, text=first_line, font=self._font_small, bg=c["card"],
-                 fg=c["dim"], anchor="w").pack(fill=tk.X, pady=(2, 0))
+        for rec in archived:
+            self._render_history_card(rec)
 
-        # Timestamp
-        ts = rec.get("timestamp", "")
-        tk.Label(inner, text=ts, font=self._font_small, bg=c["card"],
-                 fg=c["border"], anchor="w").pack(fill=tk.X, pady=(2, 0))
-
-        # Clickable — re-solve
-        eq_full = rec.get("equation", "")
-
-        def _use(eq=eq_full):
-            self.close()
-            self.app._entry.delete(0, tk.END)
-            self.app._entry.insert(0, eq)
-            self.app._on_send()
-
-        card.bind("<Button-1>", lambda e: _use())
-        for child in inner.winfo_children():
-            child.bind("<Button-1>", lambda e: _use())
-            child.configure(cursor="hand2")
+    # ── Clear history confirmation ──────────────────────────────────────
 
     def _confirm_clear_history(self) -> None:
-        """Simple confirm: replace the history list with a confirmation prompt."""
         c = self.c
         self._clear_inner()
         self._inner.configure(bg=c["bg"])
@@ -545,9 +578,8 @@ class Sidebar:
         btn_row.pack()
 
         def _confirm():
-            if self._current_user_key:
-                clear_history(self._current_user_key)
-            self._page = "history"
+            clear_history()
+            self._page = "main"
             self._render_page()
 
         tk.Button(btn_row, text="Delete All", font=self._font_bold,
@@ -559,30 +591,33 @@ class Sidebar:
                   bg=c["card"], fg=c["fg"],
                   activebackground=c["border"], activeforeground=c["fg"],
                   bd=0, padx=20, pady=8, cursor="hand2",
-                  command=lambda: self._go_page("history")).pack(side=tk.LEFT)
+                  command=lambda: self._go_page("main")).pack(side=tk.LEFT)
 
-    # ── Settings page — now opens as full page in the app ─────────────
+    # ── Settings — opens full page in app ───────────────────────────────
 
     def _go_chat(self) -> None:
-        """Close sidebar (and settings if open) to return to the chat view."""
         self.close()
         if getattr(self.app, '_settings_visible', False):
             self.app.close_settings_page()
 
     def _open_settings(self) -> None:
-        """Close sidebar and open the full-page settings view."""
         self.close()
         self.app.show_settings_page()
 
-    # ── Apply user settings to the running app ──────────────────────────
+    def _new_chat(self) -> None:
+        """Start a new chat — clears the current view."""
+        self.close()
+        if getattr(self.app, '_settings_visible', False):
+            self.app.close_settings_page()
+        self.app._clear_chat()
+
+    # ── Apply settings to the running app ───────────────────────────────
 
     def _apply_user_settings(self) -> None:
-        """Load the user's saved settings and apply them to the app."""
-        settings = get_settings(self._current_user_key)
+        settings = get_settings()
         self._apply_settings_to_app(settings)
 
     def _apply_settings_to_app(self, settings: dict) -> None:
-        """Push a settings dict into the running app state."""
         # Theme
         desired = settings.get("theme", "dark")
         if desired != self.app._theme:
@@ -591,7 +626,6 @@ class Sidebar:
             self.app._apply_theme()
             self._build_colours()
             self._apply_colours()
-            # Re-render sidebar page if open so colours update
             if self._open:
                 self._render_page()
 
@@ -605,16 +639,6 @@ class Sidebar:
         # Display toggles
         self.app._show_verification = settings.get("show_verification", False)
         self.app._show_graph = settings.get("show_graph", True)
-
-    # ── Logout ──────────────────────────────────────────────────────────
-
-    def _logout(self) -> None:
-        self._current_user = None
-        self._current_user_key = None
-        # Revert to guest settings
-        self._apply_user_settings()
-        self._page = "main"
-        self._render_page()
 
     # ── Navigation helpers ──────────────────────────────────────────────
 
@@ -642,11 +666,6 @@ class Sidebar:
         tk.Frame(self._inner, bg=c["dim"], height=1).pack(
             fill=tk.X, padx=20, pady=(12, 8))
 
-    def _divider_in(self, parent: tk.Frame) -> None:
-        c = self.c
-        tk.Frame(parent, bg=c["dim"], height=1).pack(
-            fill=tk.X, pady=(6, 2))
-
     # ── Button helpers ──────────────────────────────────────────────────
 
     def _make_menu_button(self, parent, text, command, fg=None,
@@ -663,51 +682,11 @@ class Sidebar:
         btn.bind("<Leave>", lambda e, b=btn: b.configure(bg=c["bg"]))
         return btn
 
-    def _make_accent_button(self, parent, text, command,
-                            fill=False, small=False) -> tk.Button:
-        c = self.c
-        _font = self._font_small if small else self._font_bold
-        _px = 12 if small else 20
-        _py = 4 if small else 8
-        btn = tk.Button(parent, text=text, font=_font,
-                        bg=c["accent"], fg="#ffffff",
-                        activebackground=c["accent_h"],
-                        activeforeground="#ffffff",
-                        bd=0, padx=_px, pady=_py, cursor="hand2",
-                        command=command)
-        if fill:
-            btn.pack(fill=tk.X)
-        else:
-            btn.pack(side=tk.LEFT, padx=(0, 8))
-        return btn
-
-    def _make_outline_button(self, parent, text, command,
-                              small=False) -> tk.Button:
-        c = self.c
-        _font = self._font_small if small else self._font_bold
-        _px = 10 if small else 18
-        _py = 2 if small else 6
-        _bpad = 1 if small else 2
-        # Wrap in a border frame for a visible outline on all sides
-        border_frame = tk.Frame(parent, bg=c["accent"],
-                                highlightbackground=c["accent"],
-                                highlightthickness=0, bd=0,
-                                padx=_bpad, pady=_bpad)
-        border_frame.pack(side=tk.LEFT, padx=(0, 8))
-        btn = tk.Button(border_frame, text=text, font=_font,
-                        bg=c["bg"], fg=c["accent"],
-                        activebackground=c["card"],
-                        activeforeground=c["accent"],
-                        bd=0, padx=_px, pady=_py, cursor="hand2",
-                        command=command)
-        btn.pack()
-        return btn
-
     def _make_link_button(self, parent, text, command) -> None:
         c = self.c
         btn = tk.Label(parent, text=text, font=self._font_small,
                        bg=c["bg"], fg=c["accent"], cursor="hand2")
-        btn.pack(anchor="w")
+        btn.pack(anchor="w", pady=(4, 0))
         btn.bind("<Button-1>", lambda e: command())
         btn.bind("<Enter>", lambda e, b=btn: b.configure(fg=c["accent_h"]))
         btn.bind("<Leave>", lambda e, b=btn: b.configure(fg=c["accent"]))
@@ -715,10 +694,9 @@ class Sidebar:
     # ── Public API for the app ──────────────────────────────────────────
 
     @property
-    def current_user(self) -> Optional[str]:
-        return self._current_user_key
+    def current_user(self):
+        return None  # No user system — kept for compatibility
 
     def record_solve(self, equation: str, answer: str) -> None:
-        """Call after a successful solve to log it (if logged in)."""
-        if self._current_user_key:
-            add_history(self._current_user_key, equation, answer)
+        """Log a solved equation to local history."""
+        add_history(equation, answer)
