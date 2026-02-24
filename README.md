@@ -1,36 +1,27 @@
 # SymSolver
 
-SymSolver is a desktop application that solves linear equations step-by-step. It supports single-variable equations, multi-variable equations, and systems of equations — all through a chat-style Tkinter interface with animated solution trails, interactive graphs, and dark/light theming.
+SymSolver is a step-by-step linear equation solver that uses SymPy for symbolic computation. It helps students understand how equations are solved by displaying each algebraic step, from initial equation to final answer, through a chat-style Tkinter interface with animated solution trails, interactive graphs, and dark/light theming.
 
 ## Features
 
-- **Single-variable equations** — e.g. `2x + 3 = 7`, `x/2 + 1 = 4`
-- **Multi-variable equations** — e.g. `2x + 4y = 1` (expresses each variable in terms of the others)
-- **Systems of equations** — e.g. `x + y = 10, x - y = 2` (substitution / elimination method)
-- **Step-by-step solutions** — Every solving step shows the description, expression, and a collapsible explanation
-- **Animated trail rendering** — Results appear section-by-section with phase-by-phase animation
-- **Verification** — Every solution is verified by substituting back into the original equation(s)
-- **Interactive graphs** — Matplotlib plots embedded in the GUI showing LHS vs RHS intersections, lines in the xy-plane, or system intersection points
-- **Graph analysis cards** — Structured case analysis (one solution / infinite / no solution / degenerate) with colour-coded badges
-- **Non-linear detection** — Recognises quadratic, cubic, transcendental, denominator-variable, and product-of-variables equations and returns educational explanations instead of crashing
-- **Dark / Light theme** — Toggle between themes at runtime; all widgets, graphs, and logos update live
+- **Step-by-step solving** — Breaks down each equation into individual algebraic steps using SymPy
+- **Solution verification** — Substitutes the answer back into the original equation to confirm correctness
+- **Interactive graphs** — Embedded Matplotlib plots showing intersections and solution points
+- **Non-linear detection** — Identifies unsupported equation types and provides educational explanations
+- **Solution history** — Local log of all solved equations with timestamps, clearable from the sidebar
+- **Animation controls** — Adjustable speed (slow, normal, fast, instant) for step reveals
+- **Dark / light theme** — Live theme toggle across all widgets, graphs, and logos
+- **Symbol pad** — On-screen math keyboard for inserting special characters
+- **Export** — Copy or export solutions externally
+- **Clear input** — Trash icon to quickly clear the input field
 - **Welcome screen** — Clickable example equations to get started instantly
-- **New Chat button** — Clear the conversation and start fresh
-- **Stop button** — Cancel a running solve or animation mid-stream
-- **Unicode formatting** — Superscript exponents (`x²`), stacked fraction markers (`⟦num|den⟧`), and normalised spacing for clean display
+- **New Chat / Stop** — Reset the conversation or cancel a running solve mid-stream
 
 ## Symbolic Computation
 
-SymSolver leverages **SymPy** for symbolic mathematics. Key capabilities include:
+SymSolver leverages **SymPy** for symbolic algebra — solving equations exactly (fractions, radicals), generating step-by-step breakdowns, detecting auto-simplifications, and validating linearity before solving.
 
-- **Symbolic solving** — Solves equations algebraically, preserving exact expressions (fractions, radicals)
-- **Step-by-step breakdown** — Decomposes complex solutions into individual algebraic moves
-- **Algebraic manipulation** — Adding/subtracting, multiplying/dividing, expanding, combining like terms — each shown as an explicit step
-- **Auto-simplification detection** — When SymPy auto-combines like terms or expands parentheses during parsing, the solver detects the change and shows it as a visible "Combine like terms" or "Expand" step
-- **Expression simplification** — Automatically reduces expressions to their simplest form
-- **Linearity validation** — Checks polynomial degree, transcendental functions, denominator variables, and cross-products before solving
-
-The solver produces a **Standard Trail Format** on every computation: **GIVEN → METHOD → STEPS → FINAL ANSWER → VERIFICATION → GRAPH & ANALYSIS → SUMMARY**.
+The solver produces a **Standard Trail Format**: **GIVEN → METHOD → STEPS → FINAL ANSWER → VERIFICATION → GRAPH & ANALYSIS → SUMMARY**.
 
 ## Prerequisites
 
@@ -44,20 +35,34 @@ The solver produces a **Standard Trail Format** on every computation: **GIVEN �
 
 ```
 SymSolver/
-├── main.py              # Entry point — launches the Tkinter app
-├── requirements.txt     # Python dependencies (sympy, matplotlib, numpy)
+├── main.py                  # Entry point — launches the Tkinter app
+├── requirements.txt         # Python dependencies (sympy, matplotlib, numpy, pillow)
 ├── README.md
-├── process.md           # Detailed walkthrough of how the solver works
+├── process.md               # Detailed walkthrough of how the solver works
+│
 ├── assets/
-│   ├── darkmode-logo.png
-│   └── lightmode-logo.png
+│   ├── darkmode-logo.png    # Logo for dark theme
+│   └── lightmode-logo.png   # Logo for light theme
+│
+├── data/
+│   └── symsolver.json       # Local storage (history, settings, preferences)
+│
 ├── solver/
-│   ├── __init__.py      # Exports solve_linear_equation
-│   ├── engine.py        # SymPy-powered solver with step generation (1 689 lines)
-│   └── graph.py         # Matplotlib graph builder + case analysis (920 lines)
+│   ├── __init__.py          # Exports solve_linear_equation
+│   ├── engine.py            # SymPy-powered solver with step generation (1 520 lines)
+│   └── graph.py             # Matplotlib graph builder + case analysis (820 lines)
+│
 └── gui/
-    ├── __init__.py      # Exports SymSolverApp
-    └── app.py           # Tkinter desktop GUI — chat-style interface (1 338 lines)
+    ├── __init__.py          # Exports SymSolverApp
+    ├── app.py               # Main Tkinter window — chat-style interface (569 lines)
+    ├── animation.py         # Step-by-step animation engine (464 lines)
+    ├── widgets.py           # Reusable UI widget builders (200 lines)
+    ├── sidebar.py           # Slide-in sidebar — history, settings (602 lines)
+    ├── settings.py          # Full-page settings panel (215 lines)
+    ├── storage.py           # Local JSON storage — history & preferences (125 lines)
+    ├── export.py            # Solution export / copy functionality (291 lines)
+    ├── symbolpad.py         # On-screen math symbol keyboard (93 lines)
+    └── themes.py            # Dark / light colour palettes (96 lines)
 ```
 
 ## Installation & Setup
