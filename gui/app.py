@@ -157,16 +157,31 @@ class SymSolverApp(
                                      highlightthickness=1)
         self._input_inner.pack(fill=tk.X, padx=20)
 
+        self._entry_var = tk.StringVar()
         self._entry = tk.Entry(
             self._input_inner, font=self._mono, bg=themes.INPUT_BG,
             fg=themes.TEXT_BRIGHT, insertbackground=themes.TEXT_BRIGHT,
             bd=0, relief=tk.FLAT,
             disabledbackground=themes.INPUT_BG,
             disabledforeground="#666666",
+            textvariable=self._entry_var,
         )
         self._entry.pack(side=tk.LEFT, fill=tk.X, expand=True,
                          padx=(14, 6), pady=10)
         self._entry.focus_set()
+
+        # Clear-input (trash) button — visible only when text is present
+        self._clear_input_font = tkfont.Font(family="Segoe UI", size=14)
+        self._clear_input_btn = tk.Button(
+            self._input_inner, text="🗑", font=self._clear_input_font,
+            bg=themes.INPUT_BG, fg="#ff4d4d",
+            activebackground=themes.INPUT_BG,
+            activeforeground="#ff6b6b",
+            bd=0, padx=4, pady=4, cursor="hand2", relief=tk.FLAT,
+            command=self._clear_input_field,
+        )
+        # Start hidden; show/hide via trace
+        self._entry_var.trace_add("write", self._toggle_clear_btn)
 
         # Solve / Stop buttons
         self._action_frame = tk.Frame(self._input_inner, bg=themes.INPUT_BG)
@@ -211,6 +226,26 @@ class SymSolverApp(
         w = self._send_btn.winfo_reqwidth()
         h = self._send_btn.winfo_reqheight()
         self._action_frame.configure(width=w, height=h)
+
+    # ── Input field clear button ────────────────────────────────────────
+
+    def _clear_input_field(self) -> None:
+        """Clear the input entry and refocus it."""
+        self._entry.delete(0, tk.END)
+        self._entry.focus_set()
+
+    def _toggle_clear_btn(self, *_args) -> None:
+        """Show the trash button when there is text; hide when empty."""
+        if self._entry_var.get().strip():
+            if not self._clear_input_btn.winfo_ismapped():
+                self._clear_input_btn.pack(side=tk.RIGHT, padx=(0, 2), pady=6)
+                # Re-pack sympad so trash sits between entry and sympad
+                self._sympad_btn.pack_forget()
+                self._clear_input_btn.pack_forget()
+                self._sympad_btn.pack(side=tk.RIGHT, padx=(0, 2), pady=6)
+                self._clear_input_btn.pack(side=tk.RIGHT, padx=(0, 2), pady=6)
+        else:
+            self._clear_input_btn.pack_forget()
 
     # ── Canvas / scroll helpers ─────────────────────────────────────────
 
@@ -362,6 +397,9 @@ class SymSolverApp(
         self._sympad_btn.configure(bg=p["INPUT_BG"], fg=p["TEXT_DIM"],
                                    activebackground=p["INPUT_BG"],
                                    activeforeground=p["TEXT_BRIGHT"])
+        self._clear_input_btn.configure(bg=p["INPUT_BG"], fg="#ff4d4d",
+                                        activebackground=p["INPUT_BG"],
+                                        activeforeground="#ff6b6b")
         if self._symbol_pad_win and self._symbol_pad_win.winfo_exists():
             self._close_symbol_pad()
         # scrollbar + graph palette
