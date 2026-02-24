@@ -77,6 +77,7 @@ SymSolver/
 ## Installation & Setup
 
 1. Install Python dependencies:
+
    ```bash
    pip install -r requirements.txt
    ```
@@ -88,19 +89,19 @@ SymSolver/
 
 ## Supported Equation Types
 
-| Type | Example Input | Method |
-|---|---|---|
-| Single-variable | `2x + 3 = 7` | Algebraic Isolation |
-| With fractions / exponents | `x/2 + 1 = 4`, `x^2` detected | Isolation or non-linear education |
-| Multi-variable (1 equation) | `2x + 4y = 1` | Solve for each variable in terms of the others |
-| System (2 equations) | `x + y = 10, x - y = 2` | Substitution method with back-substitution |
-| Larger / underdetermined systems | `a + b + c = 6, a - c = 2` | Parametric solution with free variables |
-| Degenerate (identity) | `2x + 3 = 2x + 3` | Detects 0 = 0 → infinite solutions |
-| Degenerate (contradiction) | `2x + 3 = 2x + 5` | Detects 0 = 2 → no solution |
-| Non-linear (polynomial) | `x^2 + 2 = 5` | Educational explanation of degree classification |
-| Non-linear (transcendental) | `sin(x) = 1` | Educational explanation of transcendental functions |
-| Non-linear (denominator) | `1/x + 1 = 3` | Educational explanation of negative exponents |
-| Non-linear (product) | `x*y = 6` | Educational explanation of variable products |
+| Type                             | Example Input                 | Method                                              |
+| -------------------------------- | ----------------------------- | --------------------------------------------------- |
+| Single-variable                  | `2x + 3 = 7`                  | Algebraic Isolation                                 |
+| With fractions / exponents       | `x/2 + 1 = 4`, `x^2` detected | Isolation or non-linear education                   |
+| Multi-variable (1 equation)      | `2x + 4y = 1`                 | Solve for each variable in terms of the others      |
+| System (2 equations)             | `x + y = 10, x - y = 2`       | Substitution method with back-substitution          |
+| Larger / underdetermined systems | `a + b + c = 6, a - c = 2`    | Parametric solution with free variables             |
+| Degenerate (identity)            | `2x + 3 = 2x + 3`             | Detects 0 = 0 → infinite solutions                  |
+| Degenerate (contradiction)       | `2x + 3 = 2x + 5`             | Detects 0 = 2 → no solution                         |
+| Non-linear (polynomial)          | `x^2 + 2 = 5`                 | Educational explanation of degree classification    |
+| Non-linear (transcendental)      | `sin(x) = 1`                  | Educational explanation of transcendental functions |
+| Non-linear (denominator)         | `1/x + 1 = 3`                 | Educational explanation of negative exponents       |
+| Non-linear (product)             | `x*y = 6`                     | Educational explanation of variable products        |
 
 ## Technologies Used
 
