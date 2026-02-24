@@ -207,13 +207,11 @@ class SettingsMixin:
             }
             save_settings(new_settings)
             self._sidebar._apply_settings_to_app(new_settings)
-            msg_label.configure(text="✓  Settings saved!", fg=p["SUCCESS"])
             new_p = themes.palette(self._theme)
             if new_p != p:
                 self._settings_scroll_pos = settings_canvas.yview()[0]
                 self.after(50, self._rebuild_settings_with_scroll)
-            else:
-                self.after(2000, lambda: msg_label.configure(text="") if msg_label.winfo_exists() else None)
+            self._show_toast("Settings saved!")
 
         save_font = tkfont.Font(family="Segoe UI", size=14, weight="bold")
         tk.Button(bottom, text="Save Settings", font=save_font,
@@ -244,6 +242,7 @@ class SettingsMixin:
         def _clear_hist():
             clear_history()
             data_msg.configure(text="✓  History cleared!", fg=p["SUCCESS"])
+            self._show_toast("History cleared!", icon="🗑")
             self.after(3000, lambda: data_msg.configure(text="")
                        if data_msg.winfo_exists() else None)
 
@@ -273,6 +272,7 @@ class SettingsMixin:
             clear_all_data()
             self._sidebar._apply_user_settings()
             data_msg.configure(text="✓  All data reset!", fg=p["SUCCESS"])
+            self._show_toast("All data reset!", icon="⚠", kind="info")
             self.after(1500, lambda: (
                 self._rebuild_settings_with_scroll()
                 if self._settings_visible else None))

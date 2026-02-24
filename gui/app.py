@@ -643,6 +643,74 @@ class SymSolverApp(
             self._scroll_to_bottom()
 
 
+    # ── Toast notification ───────────────────────────────────────────
+
+    def _show_toast(self, message: str, *, icon: str = "✓",
+                    duration: int = 2500, kind: str = "success") -> None:
+        """Show a brief toast notification in the top-right corner.
+
+        *kind* can be ``"success"`` (green), ``"error"`` (red),
+        or ``"info"`` (accent blue).
+        """
+        p = themes.palette(self._theme)
+        fg_map = {
+            "success": p["SUCCESS"],
+            "error":   p["ERROR"],
+            "info":    p["ACCENT"],
+        }
+        fg = fg_map.get(kind, p["SUCCESS"])
+
+        toast = tk.Frame(
+            self, bg=p["STEP_BG"],
+            highlightbackground=fg, highlightthickness=1,
+            padx=16, pady=10,
+        )
+
+        toast_font = tkfont.Font(family="Segoe UI", size=12, weight="bold")
+        text = f"{icon}  {message}" if icon else message
+        tk.Label(toast, text=text, font=toast_font,
+                 bg=p["STEP_BG"], fg=fg).pack()
+
+        # Place in top-right corner of the window
+        self.update_idletasks()
+        win_w = self.winfo_width()
+        toast.update_idletasks()
+        tw = toast.winfo_reqwidth()
+        x = win_w - tw - 24
+        y = 80                       # just below the header bar
+        toast.place(x=x, y=y)
+        toast.lift()                 # ensure it's above all other widgets
+
+        # Reposition on window resize while toast is visible
+        def _reposition(event=None):
+            if toast.winfo_exists():
+                toast.update_idletasks()
+                new_x = self.winfo_width() - toast.winfo_reqwidth() - 24
+                toast.place_configure(x=new_x)
+        _resize_id = self.bind("<Configure>", _reposition, add="+")
+
+        def _fade_out(alpha=1.0):
+            if not toast.winfo_exists():
+                return
+            if alpha <= 0:
+                self.unbind("<Configure>", _resize_id)
+                toast.destroy()
+                return
+            try:
+                toast.attributes  # Frames don't have attributes
+            except Exception:
+                pass
+            # Simulate fade with stepped bg blending
+            toast.after(40, lambda: _fade_out(alpha - 0.15))
+
+        def _dismiss():
+            if toast.winfo_exists():
+                self.unbind("<Configure>", _resize_id)
+                toast.destroy()
+
+        self.after(duration, _dismiss)
+
+
 def main() -> None:
     app = SymSolverApp()
     app.mainloop()
