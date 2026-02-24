@@ -515,6 +515,7 @@ class AnimationMixin:
             ("Runtime", f"{summary.get('runtime_ms', '?')} ms"),
             ("Steps", str(summary.get('total_steps', '?'))),
             ("Verification Steps", str(summary.get('verification_steps', '?'))),
+            ("Validation Status", summary.get('validation_status', '?').upper()),
             ("Timestamp", summary.get('timestamp', '?')),
             ("Library", summary.get('library', '?')),
         ]

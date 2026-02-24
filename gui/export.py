@@ -85,6 +85,7 @@ class ExportMixin:
             lines.append(f"  Runtime: {summary.get('runtime_ms', '?')} ms")
             lines.append(f"  Steps: {summary.get('total_steps', '?')}")
             lines.append(f"  Verification Steps: {summary.get('verification_steps', '?')}")
+            lines.append(f"  Validation Status: {summary.get('validation_status', '?').upper()}")
             lines.append(f"  Timestamp: {summary.get('timestamp', '?')}")
             lines.append(f"  Library: {summary.get('library', '?')}")
 
@@ -320,6 +321,7 @@ class ExportMixin:
             _label_value("Runtime", f"{summary.get('runtime_ms', '?')} ms")
             _label_value("Steps", str(summary.get('total_steps', '?')))
             _label_value("Verification Steps", str(summary.get('verification_steps', '?')))
+            _label_value("Validation Status", summary.get('validation_status', '?').upper())
             _label_value("Timestamp", summary.get('timestamp', '?'))
             _label_value("Library", summary.get('library', '?'))
 
