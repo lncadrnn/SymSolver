@@ -47,6 +47,15 @@ SymSolver/
 ├── data/
 │   └── symsolver.json       # Local storage (history, settings, preferences)
 │
+├── tests/
+│   ├── conftest.py          # Test config (matplotlib Agg backend)
+│   ├── VALIDATION_RULES.md  # Validation checklist + invalid input documentation
+│   ├── test_engine_unit.py
+│   ├── test_graph_unit.py
+│   ├── test_storage_unit.py
+│   ├── test_themes_unit.py
+│   └── test_app_and_main_unit.py
+│
 ├── solver/
 │   ├── __init__.py          # Exports solve_linear_equation
 │   ├── engine.py            # SymPy-powered solver with step generation (1 520 lines)
