@@ -579,6 +579,13 @@ class DualSolverApp(
             for child in inner.winfo_children():
                 child.destroy()
 
+            inner.configure(padx=44, pady=28)
+
+            # Enforce a minimum width for the substitution view
+            spacer = tk.Frame(inner, bg=p["STEP_BG"], height=0, width=440)
+            spacer.pack(fill=tk.X)
+            spacer.pack_propagate(False)
+
             tk.Label(inner, text="Substitution Mode",
                      font=title_font, bg=p["STEP_BG"],
                      fg=p["TEXT_BRIGHT"]).pack(pady=(0, 4))
