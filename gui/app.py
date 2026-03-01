@@ -569,37 +569,75 @@ class SymSolverApp(
         btns = tk.Frame(inner, bg=p["STEP_BG"])
         btns.pack(fill=tk.X, pady=(0, 8))
 
-        # Symbolic button
-        sym_border = tk.Frame(btns, bg=p["ACCENT"],
-                              highlightbackground=p["ACCENT"],
-                              highlightthickness=2, bd=0)
-        sym_border.pack(fill=tk.X, pady=4)
-        sym_inner = tk.Frame(sym_border, bg=p["STEP_BG"], padx=16, pady=10)
-        sym_inner.pack(fill=tk.X)
-        tk.Button(sym_inner, text="📐  Symbolic Computation",
-                  font=btn_font, bg=p["STEP_BG"], fg=p["TEXT_BRIGHT"],
-                  activebackground=p["ACCENT"], activeforeground="#ffffff",
-                  bd=0, cursor="hand2", anchor="w",
-                  command=lambda: _pick("symbolic")).pack(fill=tk.X, anchor="w")
-        tk.Label(sym_inner, text="Exact answers — fractions, radicals, π  (SymPy)",
-                 font=small_font, bg=p["STEP_BG"],
-                 fg=p["TEXT_DIM"]).pack(anchor="w", padx=(28, 0))
+        icon_font = tkfont.Font(family="Segoe UI Emoji", size=16)
 
-        # Numerical button
-        num_border = tk.Frame(btns, bg=p["ACCENT"],
+        def _make_option_card(parent, icon, title, subtitle, mode):
+            """Build a fully-clickable option card with whole-box hover."""
+            border = tk.Frame(parent, bg=p["ACCENT"],
                               highlightbackground=p["ACCENT"],
                               highlightthickness=2, bd=0)
-        num_border.pack(fill=tk.X, pady=4)
-        num_inner = tk.Frame(num_border, bg=p["STEP_BG"], padx=16, pady=10)
-        num_inner.pack(fill=tk.X)
-        tk.Button(num_inner, text="🔢  Numerical Computation",
-                  font=btn_font, bg=p["STEP_BG"], fg=p["TEXT_BRIGHT"],
-                  activebackground=p["ACCENT"], activeforeground="#ffffff",
-                  bd=0, cursor="hand2", anchor="w",
-                  command=lambda: _pick("numerical")).pack(fill=tk.X, anchor="w")
-        tk.Label(num_inner, text="Decimal approximations — floating-point  (NumPy)",
-                 font=small_font, bg=p["STEP_BG"],
-                 fg=p["TEXT_DIM"]).pack(anchor="w", padx=(28, 0))
+            border.pack(fill=tk.X, pady=4)
+            card = tk.Frame(border, bg=p["STEP_BG"], padx=16, pady=12,
+                            cursor="hand2")
+            card.pack(fill=tk.X)
+
+            # Row: icon + title
+            row = tk.Frame(card, bg=p["STEP_BG"], cursor="hand2")
+            row.pack(fill=tk.X)
+            icon_lbl = tk.Label(row, text=icon, font=icon_font,
+                                bg=p["STEP_BG"], fg=p["TEXT_BRIGHT"],
+                                cursor="hand2")
+            icon_lbl.pack(side=tk.LEFT, padx=(0, 8))
+            title_lbl = tk.Label(row, text=title, font=btn_font,
+                                 bg=p["STEP_BG"], fg=p["TEXT_BRIGHT"],
+                                 cursor="hand2", anchor="w")
+            title_lbl.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+            sub_lbl = tk.Label(card, text=subtitle, font=small_font,
+                               bg=p["STEP_BG"], fg=p["TEXT_DIM"],
+                               cursor="hand2", anchor="w")
+            sub_lbl.pack(fill=tk.X, padx=(32, 0))
+
+            # Collect all widgets so hover changes the whole card
+            all_widgets = [card, row, icon_lbl, title_lbl, sub_lbl]
+
+            def _on_enter(_evt):
+                for w in all_widgets:
+                    w.configure(bg=p["ACCENT"])
+                title_lbl.configure(fg="#ffffff")
+                sub_lbl.configure(fg="#ffffff")
+
+            def _on_leave(_evt):
+                for w in all_widgets:
+                    w.configure(bg=p["STEP_BG"])
+                title_lbl.configure(fg=p["TEXT_BRIGHT"])
+                sub_lbl.configure(fg=p["TEXT_DIM"])
+
+            def _on_click(_evt):
+                _pick(mode)
+
+            for w in all_widgets:
+                w.bind("<Enter>", _on_enter)
+                w.bind("<Leave>", _on_leave)
+                w.bind("<Button-1>", _on_click)
+
+            border.bind("<Enter>", _on_enter)
+            border.bind("<Leave>", _on_leave)
+            border.bind("<Button-1>", _on_click)
+
+        # Symbolic option
+        _make_option_card(
+            btns, "📐", "Symbolic Computation",
+            "Exact answers — fractions, radicals, π  (SymPy)",
+            "symbolic",
+        )
+
+        # Numerical option
+        _make_option_card(
+            btns, "🔢", "Numerical Computation",
+            "Decimal approximations — floating-point  (NumPy)",
+            "numerical",
+        )
 
         # Cancel link
         tk.Button(inner, text="Cancel", font=label_font,
