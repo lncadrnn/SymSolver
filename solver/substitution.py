@@ -35,6 +35,25 @@ from solver.symbolic import (
 )
 
 
+def _strip_trailing_zeros(s: str) -> str:
+    """Remove unnecessary trailing zeros from decimal strings.
+
+    ``'7.0000000000000'`` → ``'7'``
+    ``'7.21310000000'``  → ``'7.2131'``
+    ``'-3.85840734641021'`` stays as-is (no trailing zeros).
+    """
+    if '.' not in s:
+        return s
+    # Handle negative sign separately
+    parts = s.split()
+    cleaned = []
+    for part in parts:
+        if '.' in part:
+            part = part.rstrip('0').rstrip('.')
+        cleaned.append(part)
+    return ' '.join(cleaned)
+
+
 def _parse_values(values_str: str) -> dict[str, str]:
     """Parse a user-supplied values string like ``x = 3, y = 4``.
 
@@ -71,7 +90,8 @@ def _parse_values(values_str: str) -> dict[str, str]:
     return result
 
 
-def solve_substitution(equation_str: str, values_str: str) -> dict:
+def solve_substitution(equation_str: str, values_str: str,
+                       compute_mode: str = "symbolic") -> dict:
     """Substitute user-given values into an equation and verify.
 
     Parameters
@@ -80,6 +100,9 @@ def solve_substitution(equation_str: str, values_str: str) -> dict:
         The equation to check (e.g. ``2x + 1 = 7``).
     values_str : str
         Comma-separated variable assignments (e.g. ``x = 3``).
+    compute_mode : str, optional
+        ``"symbolic"`` (default) — exact results (fractions, π, etc.).
+        ``"numerical"`` — decimal approximations.
 
     Returns
     -------
@@ -207,10 +230,23 @@ def solve_substitution(equation_str: str, values_str: str) -> dict:
     subs_dict = {var_symbols[name]: val for name, val in parsed_values.items()}
     lhs_result = simplify(lhs_expr.subs(subs_dict))
     rhs_result = simplify(rhs_expr.subs(subs_dict))
+
+    # Convert to decimal if numerical mode
+    if compute_mode == "numerical":
+        lhs_result = lhs_result.evalf()
+        rhs_result = rhs_result.evalf()
+
     lhs_result_str = _format_expr(lhs_result)
     rhs_result_str = _format_expr(rhs_result)
     lhs_result_plain = _format_expr_plain(lhs_result)
     rhs_result_plain = _format_expr_plain(rhs_result)
+
+    # Strip trailing zeros for numerical mode
+    if compute_mode == "numerical":
+        lhs_result_str = _strip_trailing_zeros(lhs_result_str)
+        rhs_result_str = _strip_trailing_zeros(rhs_result_str)
+        lhs_result_plain = _strip_trailing_zeros(lhs_result_plain)
+        rhs_result_plain = _strip_trailing_zeros(rhs_result_plain)
 
     steps.append({
         "description": "Evaluate the equation",
@@ -223,8 +259,14 @@ def solve_substitution(equation_str: str, values_str: str) -> dict:
 
     # Step 5: Move RHS to the left to get the total value of the equation
     equation_value = simplify(lhs_result - rhs_result)
+    if compute_mode == "numerical":
+        equation_value = equation_value.evalf()
     eq_val_str = _format_expr(equation_value)
     eq_val_plain = _format_expr_plain(equation_value)
+
+    if compute_mode == "numerical":
+        eq_val_str = _strip_trailing_zeros(eq_val_str)
+        eq_val_plain = _strip_trailing_zeros(eq_val_plain)
     is_valid = equation_value == 0
 
     steps.append({
@@ -267,7 +309,9 @@ def solve_substitution(equation_str: str, values_str: str) -> dict:
             "left_side":  _fmt_lhs,
             "right_side": _fmt_rhs,
             "values":     values_display,
-            "computation": "Substitution (SymPy)",
+            "computation": ("Substitution — Numerical (SymPy)"
+                            if compute_mode == "numerical"
+                            else "Substitution — Symbolic (SymPy)"),
         },
     }
 

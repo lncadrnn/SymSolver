@@ -56,7 +56,8 @@ from solver.substitution import solve_substitution as _solve_substitution
 
 
 def solve_linear_equation(equation_str: str, *, mode: str = "symbolic",
-                          values_str: str = "") -> dict:
+                          values_str: str = "",
+                          compute_mode: str = "symbolic") -> dict:
     """Solve a linear equation either symbolically or numerically,
     or verify it via substitution.
 
@@ -70,9 +71,12 @@ def solve_linear_equation(equation_str: str, *, mode: str = "symbolic",
         ``"substitution"`` — substitute given values and check.
     values_str : str, optional
         Variable assignments for substitution mode (e.g. ``"x = 3, y = 4"``).
+    compute_mode : str, optional
+        For substitution mode: ``"symbolic"`` (exact) or
+        ``"numerical"`` (decimal).
     """
     if mode == "substitution":
-        result = _solve_substitution(equation_str, values_str)
+        result = _solve_substitution(equation_str, values_str, compute_mode)
     elif mode == "numerical":
         result = _solve_numeric(equation_str)
     else:

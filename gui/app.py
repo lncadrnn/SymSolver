@@ -623,6 +623,55 @@ class DualSolverApp(
             val_entry.pack(fill=tk.X, padx=10, pady=8)
             val_entry.focus_set()
 
+            # Symbolic / Numerical toggle
+            toggle_frame = tk.Frame(inner, bg=p["STEP_BG"])
+            toggle_frame.pack(fill=tk.X, pady=(6, 4))
+            tk.Label(toggle_frame, text="Compute as:", font=small_font,
+                     bg=p["STEP_BG"], fg=p["TEXT_DIM"]
+                     ).pack(side=tk.LEFT, padx=(0, 8))
+
+            sub_compute_mode = tk.StringVar(value="symbolic")
+            toggle_btn_font = tkfont.Font(family="Segoe UI", size=11,
+                                          weight="bold")
+
+            sym_toggle = tk.Button(toggle_frame, text="📐 Symbolic",
+                                   font=toggle_btn_font,
+                                   bg=p["ACCENT"], fg="#ffffff",
+                                   activebackground=p["ACCENT_HOVER"],
+                                   activeforeground="#ffffff",
+                                   bd=0, padx=12, pady=4, cursor="hand2",
+                                   relief=tk.FLAT)
+            sym_toggle.pack(side=tk.LEFT, padx=(0, 4))
+
+            num_toggle = tk.Button(toggle_frame, text="🔢 Numerical",
+                                   font=toggle_btn_font,
+                                   bg=p["STEP_BG"], fg=p["TEXT_DIM"],
+                                   activebackground=p["ACCENT_HOVER"],
+                                   activeforeground="#ffffff",
+                                   bd=0, padx=12, pady=4, cursor="hand2",
+                                   relief=tk.FLAT,
+                                   highlightthickness=1,
+                                   highlightbackground=p["STEP_BORDER"])
+            num_toggle.pack(side=tk.LEFT)
+
+            def _set_compute(mode_val):
+                sub_compute_mode.set(mode_val)
+                if mode_val == "symbolic":
+                    sym_toggle.configure(bg=p["ACCENT"], fg="#ffffff",
+                                         highlightthickness=0)
+                    num_toggle.configure(bg=p["STEP_BG"], fg=p["TEXT_DIM"],
+                                         highlightthickness=1,
+                                         highlightbackground=p["STEP_BORDER"])
+                else:
+                    num_toggle.configure(bg=p["ACCENT"], fg="#ffffff",
+                                         highlightthickness=0)
+                    sym_toggle.configure(bg=p["STEP_BG"], fg=p["TEXT_DIM"],
+                                         highlightthickness=1,
+                                         highlightbackground=p["STEP_BORDER"])
+
+            sym_toggle.configure(command=lambda: _set_compute("symbolic"))
+            num_toggle.configure(command=lambda: _set_compute("numerical"))
+
             # Error label (hidden initially)
             error_lbl = tk.Label(inner, text="", font=small_font,
                                  bg=p["STEP_BG"], fg=p["ERROR"],
@@ -637,7 +686,8 @@ class DualSolverApp(
                 backdrop.destroy()
                 modal.destroy()
                 self._solve_with_mode(equation, "substitution",
-                                      values_str=values)
+                                      values_str=values,
+                                      compute_mode=sub_compute_mode.get())
 
             val_entry.bind("<Return>", _submit_substitution)
 
@@ -764,7 +814,8 @@ class DualSolverApp(
         modal.focus_set()
 
     def _solve_with_mode(self, equation: str, mode: str,
-                         values_str: str = "") -> None:
+                         values_str: str = "",
+                         compute_mode: str = "symbolic") -> None:
         """Run the solve pipeline with the chosen mode."""
         if not (self._PHASE_PAUSE == 0 and self._TYPING_SPEED == 0):
             self._auto_scroll = True
@@ -787,7 +838,8 @@ class DualSolverApp(
         def _solve():
             try:
                 result = solve_linear_equation(equation, mode=mode,
-                                               values_str=values_str)
+                                               values_str=values_str,
+                                               compute_mode=compute_mode)
                 self.after(0, lambda: self._show_result(result, loading_label)
                            if self._solve_gen == gen else None)
             except Exception as exc:
