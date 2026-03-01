@@ -604,12 +604,14 @@ class SymSolverApp(
             def _on_enter(_evt):
                 for w in all_widgets:
                     w.configure(bg=p["ACCENT"])
+                icon_lbl.configure(fg="#ffffff")
                 title_lbl.configure(fg="#ffffff")
                 sub_lbl.configure(fg="#ffffff")
 
             def _on_leave(_evt):
                 for w in all_widgets:
                     w.configure(bg=p["STEP_BG"])
+                icon_lbl.configure(fg=p["TEXT_BRIGHT"])
                 title_lbl.configure(fg=p["TEXT_BRIGHT"])
                 sub_lbl.configure(fg=p["TEXT_DIM"])
 
