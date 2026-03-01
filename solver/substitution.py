@@ -329,12 +329,14 @@ def solve_substitution(equation_str: str, values_str: str,
     }
 
     summary = {
+        "final_answer": final_answer,
         "runtime_ms": runtime_ms,
         "total_steps": len(steps),
-        "verification_steps": 0,
         "validation_status": validation_status,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "library": f"SymPy {sympy.__version__}",
+        "library": (f"NumPy {__import__('numpy').__version__}"
+                    if compute_mode == "numerical"
+                    else f"SymPy {sympy.__version__}"),
         "python": None,
     }
 

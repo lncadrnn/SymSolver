@@ -515,14 +515,27 @@ class AnimationMixin:
         status_lbl.destroy()
         self._render_section_header(parent, "SUMMARY", "■")
         sum_frame = self._make_card(parent, themes.STEP_BG)
-        details = [
+        details = []
+        # Show final answer at the very top when present (substitution mode)
+        if summary.get('final_answer'):
+            # Split multi-line final answer into separate rows
+            for line in summary['final_answer'].split('\n'):
+                line = line.strip()
+                if line:
+                    details.append(("Answer", line))
+        details.extend([
             ("Runtime", f"{summary.get('runtime_ms', '?')} ms"),
             ("Steps", str(summary.get('total_steps', '?'))),
-            ("Verification Steps", str(summary.get('verification_steps', '?'))),
+        ])
+        # Only show verification steps row when it's present and > 0
+        v_steps = summary.get('verification_steps')
+        if v_steps is not None and v_steps != 0:
+            details.append(("Verification Steps", str(v_steps)))
+        details.extend([
             ("Validation Status", summary.get('validation_status', '?').upper()),
             ("Timestamp", summary.get('timestamp', '?')),
             ("Library", summary.get('library', '?')),
-        ]
+        ])
         self._type_summary_rows(sum_frame, details, 0)
 
     def _type_summary_rows(self, parent, details, idx):
