@@ -38,7 +38,7 @@ A `time.perf_counter()` timer starts at the top of `solve_linear_equation()` to 
 
 ```python
 if '=' not in equation_str:
-    raise ValueError("Equation must contain '='. Example: 2x + 3 = 7")
+    raise ValueError("Equation must contain '='. Example: 3x + 2 = 7")
 ```
 
 ✅ **Pass:** `2x + 2 = 5` contains `=`
@@ -410,7 +410,7 @@ Before any parsing, `_validate_characters()` rejects input containing characters
 ### Missing `=` sign
 ```python
 if '=' not in equation_str:
-    raise ValueError("Equation must contain '='. Example: 2x + 3 = 7")
+    raise ValueError("Equation must contain '='. Example: 3x + 2 = 7")
 ```
 **GUI shows:** Red error message card
 
@@ -531,7 +531,7 @@ When the solver determines an equation is not linear, it does **not** raise an e
 
 ```
 Degree 0  →  constant   (e.g.  5 = 5)
-Degree 1  →  linear     (e.g.  2x + 3 = 7)  ← must be this
+Degree 1  →  linear     (e.g.  3x + 2 = 7)  ← must be this
 Degree 2  →  quadratic  (e.g.  x² + 5x + 6 = 0)
 Degree 3  →  cubic      (e.g.  x³ − 2x² + x = 0)
 ...

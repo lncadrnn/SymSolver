@@ -91,7 +91,7 @@ SymSolver/
 
 | Type                             | Example Input                 | Method                                              |
 | -------------------------------- | ----------------------------- | --------------------------------------------------- |
-| Single-variable                  | `2x + 3 = 7`                  | Algebraic Isolation                                 |
+| Single-variable                  | `3x + 2 = 7`                  | Algebraic Isolation                                 |
 | With fractions / exponents       | `x/2 + 1 = 4`, `x^2` detected | Isolation or non-linear education                   |
 | Multi-variable (1 equation)      | `2x + 4y = 1`                 | Solve for each variable in terms of the others      |
 | System (2 equations)             | `x + y = 10, x - y = 2`       | Substitution method with back-substitution          |

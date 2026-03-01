@@ -82,7 +82,7 @@ def solve_linear_equation(equation_str: str, *, mode: str = "symbolic") -> dict:
 
 if __name__ == "__main__":
     tests = [
-        "2x + 3 = 7",
+        "3x + 2 = 7",
         "x/3 + 1 = 4",
         "x + y = 10, x - y = 2",
     ]

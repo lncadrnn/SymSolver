@@ -5,7 +5,7 @@ from solver import engine
 
 
 def test_detect_variables_and_expand_implicit_vars() -> None:
-    assert engine._detect_variables("2x + 3 = 7") == ["x"]
+    assert engine._detect_variables("3x + 2 = 7") == ["x"]
     assert engine._detect_variables("as + in = 1") == ["a", "i", "n", "s"]
     expanded = engine._expand_implicit_vars("as + in + x", {"a", "s", "i", "n", "x"})
     assert expanded == "a*s + i*n + x"
@@ -14,7 +14,7 @@ def test_detect_variables_and_expand_implicit_vars() -> None:
 @pytest.mark.parametrize(
     "raw,expected",
     [
-        ("2x+3=7", "2x + 3 = 7"),
+        ("3x+2=7", "3x + 2 = 7"),
         ("x-2=1", "x - 2 = 1"),
         ("(x+1)/2=3", "⟦x+1|2⟧ = 3"),
     ],
@@ -100,4 +100,4 @@ def test_invalid_input_multiple_equal_signs() -> None:
 
 def test_invalid_input_bad_characters() -> None:
     with pytest.raises(ValueError, match="Invalid character"):
-        engine.solve_linear_equation("2x + 3 = 7$")
+        engine.solve_linear_equation("3x + 2 = 7$")

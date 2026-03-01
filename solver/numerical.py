@@ -1,7 +1,7 @@
 """Numerical (approximate) linear equation solver using NumPy."""
 
 """
-Parses linear equations — single-variable (e.g. "2x + 3 = 7"),
+Parses linear equations — single-variable (e.g. "3x + 2 = 7"),
 multi-variable (e.g. "2x + 4y = 1"), or systems of equations
 (e.g. "x + y = 10, x - y = 2") — and solves them numerically,
 returning decimal approximations via NumPy.
@@ -84,7 +84,7 @@ def solve_numeric(equation_str: str) -> dict:
     Solve one or more linear equations numerically (decimal approximation).
 
     Supports the same inputs as the symbolic solver:
-      - Single variable:  ``2x + 3 = 7``
+      - Single variable:  ``3x + 2 = 7``
       - Multiple variables:  ``2x + 4y = 1``
       - Systems (comma / semicolon separated):  ``x + y = 10, x - y = 2``
 
@@ -115,7 +115,7 @@ def solve_numeric(equation_str: str) -> dict:
 
     # ── Single equation, single variable ─────────────────────────────
     if '=' not in equation_str:
-        raise ValueError("Equation must contain '='. Example: 2x + 3 = 7")
+        raise ValueError("Equation must contain '='. Example: 3x + 2 = 7")
 
     parts = equation_str.split('=')
     if len(parts) != 2:
@@ -852,7 +852,7 @@ def _build_result(equation_str, fmt_eq, fmt_lhs, fmt_rhs,
 
 if __name__ == "__main__":
     test_equations = [
-        "2x + 3 = 7",
+        "3x + 2 = 7",
         "5x - 2 = 3x + 8",
         "3(x + 4) = 2x - 1",
         "x/2 + 1 = 4",

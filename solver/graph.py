@@ -3,7 +3,7 @@ Graph builder for SymSolver.
 
 Produces a dark-themed matplotlib Figure for embedding in the Tkinter GUI.
 Handles three equation types:
-  - single_var : one equation, one unknown  (e.g. "2x + 3 = 7")
+  - single_var : one equation, one unknown  (e.g. "3x + 2 = 7")
   - two_var    : one equation, two unknowns (e.g. "2x + 3y = 6")
   - system     : two equations, two unknowns (e.g. "x+y=10, x-y=2")
 """

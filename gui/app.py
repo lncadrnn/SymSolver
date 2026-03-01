@@ -503,7 +503,7 @@ class SymSolverApp(
             font=self._bold, bg=themes.BG, fg=themes.TEXT_DIM,
         ).pack(pady=(0, 6))
 
-        examples = ["2x + 3 = 7", "x + π = 10"]
+        examples = ["3x + 2 = 7", "x + π = 10"]
         for eq in examples:
             btn = tk.Button(
                 self._welcome_frame, text=eq, font=self._mono,

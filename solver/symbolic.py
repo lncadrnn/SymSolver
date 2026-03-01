@@ -1,7 +1,7 @@
 """ Step-by-step linear equation solver using SymPy."""
 
 """
-Parses linear equations — single-variable (e.g. "2x + 3 = 7"),
+Parses linear equations — single-variable (e.g. "3x + 2 = 7"),
 multi-variable (e.g. "2x + 4y = 1"), or systems of equations
 (e.g. "x + y = 10, x - y = 2") — and produces human-readable
 step-by-step explanations.
@@ -421,7 +421,7 @@ def _build_educational_message(reason: str, highest_deg: int,
         "\n"
         "Equations are classified by their highest degree:\n"
         "  Degree 0  →  constant   (e.g.  5 = 5)\n"
-        "  Degree 1  →  linear     (e.g.  2x + 3 = 7)  ← must be this\n"
+        "  Degree 1  →  linear     (e.g.  3x + 2 = 7)  ← must be this\n"
         "  Degree 2  →  quadratic  (e.g.  x² + 5x + 6 = 0)\n"
         "  Degree 3  →  cubic      (e.g.  x³ − 2x² + x = 0)\n"
         "  Degree 4  →  quartic    (e.g.  x⁴ − 1 = 0)\n"
@@ -646,7 +646,7 @@ def solve_linear_equation(equation_str: str) -> dict:
     Solve one or more linear equations step by step.
 
     Supports:
-      - Single variable:  ``2x + 3 = 7``
+      - Single variable:  ``3x + 2 = 7``
       - Multiple variables:  ``2x + 4y = 1``
       - Systems (comma / semicolon separated):  ``x + y = 10, x - y = 2``
 
@@ -677,7 +677,7 @@ def solve_linear_equation(equation_str: str) -> dict:
 
     # ── Single equation, single variable ────────────────────────────────
     if '=' not in equation_str:
-        raise ValueError("Equation must contain '='. Example: 2x + 3 = 7")
+        raise ValueError("Equation must contain '='. Example: 3x + 2 = 7")
 
     parts = equation_str.split('=')
     if len(parts) != 2:
@@ -1696,7 +1696,7 @@ def _append_solution_step(steps, var_names, var_symbols, sol_dict,
 if __name__ == "__main__":
     # Quick test
     test_equations = [
-        "2x + 3 = 7",
+        "3x + 2 = 7",
         "5x - 2 = 3x + 8",
         "3(x + 4) = 2x - 1",
         "x/2 + 1 = 4",
