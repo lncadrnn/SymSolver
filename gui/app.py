@@ -92,7 +92,14 @@ class DualSolverApp(
         self._hamburger_btn.pack(side=tk.LEFT, padx=(14, 0))
 
         self._header_logo = self._load_header_logo()
-        self._header_logo.pack(side=tk.LEFT, padx=(8, 20))
+        self._header_logo.pack(side=tk.LEFT, padx=(8, 0))
+
+        self._header_title_font = tkfont.Font(family="Segoe UI", size=18, weight="bold")
+        self._header_title = tk.Label(
+            self._header, text="DualSolver", font=self._header_title_font,
+            bg=themes.HEADER_BG, fg=themes.TEXT_DIM,
+        )
+        self._header_title.pack(side=tk.LEFT, padx=(6, 20))
 
         self._small_bold = tkfont.Font(family="Segoe UI", size=12, weight="bold")
         self._new_btn = tk.Button(
@@ -339,7 +346,11 @@ class DualSolverApp(
             pass
         self._header_logo = self._load_header_logo()
         self._header_logo.configure(bg=p["HEADER_BG"])
-        self._header_logo.pack(side=tk.LEFT, padx=(8, 20))
+        self._header_logo.pack(side=tk.LEFT, padx=(8, 0))
+
+        self._header_title.configure(bg=p["HEADER_BG"], fg=p["TEXT_DIM"])
+        self._header_title.pack_forget()
+        self._header_title.pack(side=tk.LEFT, padx=(6, 20))
 
     def _toggle_sidebar(self) -> None:
         self._sidebar.toggle()
