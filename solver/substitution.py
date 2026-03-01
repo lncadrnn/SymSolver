@@ -285,13 +285,13 @@ def solve_substitution(equation_str: str, values_str: str,
         final_answer = (
             f"{lhs_result_plain} = {rhs_result_plain}\n"
             f"LHS and RHS are equal  ✓\n"
-            f"Equation value = {eq_val_plain}"
+            f"Equation value = {eq_val_str}"
         )
     else:
         final_answer = (
             f"{lhs_result_plain} ≠ {rhs_result_plain}\n"
             f"LHS and RHS are NOT equal  ✗\n"
-            f"Equation value = {eq_val_plain}"
+            f"Equation value = {eq_val_str}"
         )
 
     # ── Number the steps ─────────────────────────────────────────────
@@ -329,7 +329,6 @@ def solve_substitution(equation_str: str, values_str: str,
     }
 
     summary = {
-        "final_answer": final_answer,
         "runtime_ms": runtime_ms,
         "total_steps": len(steps),
         "validation_status": validation_status,

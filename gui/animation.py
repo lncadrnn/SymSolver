@@ -166,6 +166,9 @@ class AnimationMixin:
         # ── SUMMARY ────────────────────────────────────────────────
         summary = result.get("summary", {})
         if summary:
+            # Inject final_answer and substitution flag for the renderer
+            summary["_final_answer"] = result.get("final_answer", "")
+            summary["_is_substitution"] = _is_substitution
             def _render_summary():
                 status = self._show_status(bot, "Summarizing...")
                 self._phase_then(status, lambda: self._animate_summary(
@@ -516,13 +519,22 @@ class AnimationMixin:
         self._render_section_header(parent, "SUMMARY", "■")
         sum_frame = self._make_card(parent, themes.STEP_BG)
         details = []
-        # Show final answer at the very top when present (substitution mode)
-        if summary.get('final_answer'):
-            # Split multi-line final answer into separate rows
-            for line in summary['final_answer'].split('\n'):
-                line = line.strip()
-                if line:
-                    details.append(("Answer", line))
+
+        # Show final answer at the very top of summary (all modes)
+        _answer = summary.get('_final_answer', '')
+        _is_sub = summary.get('_is_substitution', False)
+        if _answer:
+            if _is_sub:
+                # For substitution: only show the "Equation value = ..." line
+                for line in _answer.split('\n'):
+                    line = line.strip()
+                    if line.startswith('Equation value'):
+                        details.append(("Answer", line))
+                        break
+            else:
+                # For symbolic / numerical: show the full final answer
+                details.append(("Answer", _answer))
+
         details.extend([
             ("Runtime", f"{summary.get('runtime_ms', '?')} ms"),
             ("Steps", str(summary.get('total_steps', '?'))),
@@ -544,11 +556,23 @@ class AnimationMixin:
             row = tk.Frame(parent, bg=themes.STEP_BG)
             row.pack(fill=tk.X, pady=1)
             full_text = f"  {label}:  {value}"
-            lbl = tk.Label(row, text="", font=self._small,
-                           bg=themes.STEP_BG, fg=themes.TEXT_DIM, anchor="w")
-            lbl.pack(side=tk.LEFT)
-            self._type_chars(lbl, full_text, 0,
-                             lambda: self._type_summary_rows(parent, details, idx + 1))
+
+            # Answer rows may contain fractions (⟦n|d⟧) or special symbols —
+            # render them with the math-expression renderer so π, √, and
+            # stacked fractions display correctly.
+            if label == "Answer" and self._FRAC_RE.search(full_text):
+                self._render_math_expr(row, full_text,
+                                       font=self._small,
+                                       bg=themes.STEP_BG,
+                                       fg=themes.TEXT_DIM)
+                self._scroll_to_bottom()
+                self._type_summary_rows(parent, details, idx + 1)
+            else:
+                lbl = tk.Label(row, text="", font=self._small,
+                               bg=themes.STEP_BG, fg=themes.TEXT_DIM, anchor="w")
+                lbl.pack(side=tk.LEFT)
+                self._type_chars(lbl, full_text, 0,
+                                 lambda: self._type_summary_rows(parent, details, idx + 1))
         else:
             self._scroll_to_bottom()
             self._schedule_next()
