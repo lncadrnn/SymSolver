@@ -503,7 +503,7 @@ class SymSolverApp(
             font=self._bold, bg=themes.BG, fg=themes.TEXT_DIM,
         ).pack(pady=(0, 6))
 
-        examples = ["2x + 3 = 7", "x + y = 10, x - y = 2"]
+        examples = ["2x + 3 = 7", "x + π = 10"]
         for eq in examples:
             btn = tk.Button(
                 self._welcome_frame, text=eq, font=self._mono,
@@ -516,9 +516,130 @@ class SymSolverApp(
             btn.pack(pady=3)
 
     def _use_example(self, equation: str) -> None:
+        """Fill the input with an example, then ask how to solve it."""
         self._entry.delete(0, tk.END)
         self._entry.insert(0, equation)
-        self._on_send()
+        self._show_solve_mode_modal(equation)
+
+    # ── Solve-mode modal ────────────────────────────────────────────────
+
+    def _show_solve_mode_modal(self, equation: str) -> None:
+        """Show a centred modal asking the user to pick symbolic or numerical."""
+        p = themes.palette(self._theme)
+
+        # Backdrop (dim overlay)
+        backdrop = tk.Frame(self, bg="#000000")
+        backdrop.place(relx=0, rely=0, relwidth=1, relheight=1)
+        backdrop.configure(bg="#000000")
+        # Semi-transparent look via a low-opacity trick: dark bg
+        backdrop.lift()
+
+        # Modal card
+        modal = tk.Frame(self, bg=p["STEP_BG"], padx=0, pady=0,
+                         highlightbackground=p["STEP_BORDER"],
+                         highlightthickness=2, bd=0)
+        modal.place(relx=0.5, rely=0.5, anchor="center")
+        modal.lift()
+
+        inner = tk.Frame(modal, bg=p["STEP_BG"], padx=36, pady=28)
+        inner.pack()
+
+        title_font = tkfont.Font(family="Segoe UI", size=18, weight="bold")
+        label_font = tkfont.Font(family="Segoe UI", size=13)
+        small_font = tkfont.Font(family="Segoe UI", size=11)
+        btn_font   = tkfont.Font(family="Segoe UI", size=14, weight="bold")
+
+        tk.Label(inner, text="How do you want this solved?",
+                 font=title_font, bg=p["STEP_BG"],
+                 fg=p["TEXT_BRIGHT"]).pack(pady=(0, 4))
+
+        eq_display = equation.replace('pi', 'π')
+        tk.Label(inner, text=eq_display, font=self._mono,
+                 bg=p["STEP_BG"], fg=p["ACCENT"]).pack(pady=(0, 16))
+
+        def _pick(mode):
+            backdrop.destroy()
+            modal.destroy()
+            self._solve_with_mode(equation, mode)
+
+        def _cancel():
+            backdrop.destroy()
+            modal.destroy()
+
+        btns = tk.Frame(inner, bg=p["STEP_BG"])
+        btns.pack(fill=tk.X, pady=(0, 8))
+
+        # Symbolic button
+        sym_border = tk.Frame(btns, bg=p["ACCENT"],
+                              highlightbackground=p["ACCENT"],
+                              highlightthickness=2, bd=0)
+        sym_border.pack(fill=tk.X, pady=4)
+        sym_inner = tk.Frame(sym_border, bg=p["STEP_BG"], padx=16, pady=10)
+        sym_inner.pack(fill=tk.X)
+        tk.Button(sym_inner, text="📐  Symbolic Computation",
+                  font=btn_font, bg=p["STEP_BG"], fg=p["TEXT_BRIGHT"],
+                  activebackground=p["ACCENT"], activeforeground="#ffffff",
+                  bd=0, cursor="hand2", anchor="w",
+                  command=lambda: _pick("symbolic")).pack(fill=tk.X, anchor="w")
+        tk.Label(sym_inner, text="Exact answers — fractions, radicals, π  (SymPy)",
+                 font=small_font, bg=p["STEP_BG"],
+                 fg=p["TEXT_DIM"]).pack(anchor="w", padx=(28, 0))
+
+        # Numerical button
+        num_border = tk.Frame(btns, bg=p["ACCENT"],
+                              highlightbackground=p["ACCENT"],
+                              highlightthickness=2, bd=0)
+        num_border.pack(fill=tk.X, pady=4)
+        num_inner = tk.Frame(num_border, bg=p["STEP_BG"], padx=16, pady=10)
+        num_inner.pack(fill=tk.X)
+        tk.Button(num_inner, text="🔢  Numerical Computation",
+                  font=btn_font, bg=p["STEP_BG"], fg=p["TEXT_BRIGHT"],
+                  activebackground=p["ACCENT"], activeforeground="#ffffff",
+                  bd=0, cursor="hand2", anchor="w",
+                  command=lambda: _pick("numerical")).pack(fill=tk.X, anchor="w")
+        tk.Label(num_inner, text="Decimal approximations — floating-point  (NumPy)",
+                 font=small_font, bg=p["STEP_BG"],
+                 fg=p["TEXT_DIM"]).pack(anchor="w", padx=(28, 0))
+
+        # Cancel link
+        tk.Button(inner, text="Cancel", font=label_font,
+                  bg=p["STEP_BG"], fg=p["TEXT_DIM"],
+                  activebackground=p["STEP_BG"], activeforeground=p["TEXT_BRIGHT"],
+                  bd=0, cursor="hand2", command=_cancel).pack(pady=(8, 0))
+
+        # Close on backdrop click
+        backdrop.bind("<Button-1>", lambda _: _cancel())
+
+        # Close on Escape
+        modal.bind("<Escape>", lambda _: _cancel())
+        modal.focus_set()
+
+    def _solve_with_mode(self, equation: str, mode: str) -> None:
+        """Run the solve pipeline with the chosen mode."""
+        if not (self._PHASE_PAUSE == 0 and self._TYPING_SPEED == 0):
+            self._auto_scroll = True
+
+        if hasattr(self, "_welcome_frame") and self._welcome_frame.winfo_exists():
+            self._welcome_frame.destroy()
+
+        self._entry.delete(0, tk.END)
+        self._set_input_state(False)
+
+        self._add_user_message(equation)
+        loading_label = self._add_loading()
+
+        gen = self._solve_gen
+        def _solve():
+            try:
+                result = solve_linear_equation(equation, mode=mode)
+                self.after(0, lambda: self._show_result(result, loading_label)
+                           if self._solve_gen == gen else None)
+            except Exception as exc:
+                msg = self._friendly_error(equation, exc)
+                self.after(0, lambda: self._show_error(msg, loading_label)
+                           if self._solve_gen == gen else None)
+
+        threading.Thread(target=_solve, daemon=True).start()
 
     # ── Clear / reset ───────────────────────────────────────────────────
 
@@ -541,31 +662,7 @@ class SymSolverApp(
         equation = self._entry.get().strip()
         if not equation:
             return
-
-        if not (self._PHASE_PAUSE == 0 and self._TYPING_SPEED == 0):
-            self._auto_scroll = True
-
-        if hasattr(self, "_welcome_frame") and self._welcome_frame.winfo_exists():
-            self._welcome_frame.destroy()
-
-        self._entry.delete(0, tk.END)
-        self._set_input_state(False)
-
-        self._add_user_message(equation)
-        loading_label = self._add_loading()
-
-        gen = self._solve_gen
-        def _solve():
-            try:
-                result = solve_linear_equation(equation)
-                self.after(0, lambda: self._show_result(result, loading_label)
-                           if self._solve_gen == gen else None)
-            except Exception as exc:
-                msg = self._friendly_error(equation, exc)
-                self.after(0, lambda: self._show_error(msg, loading_label)
-                           if self._solve_gen == gen else None)
-
-        threading.Thread(target=_solve, daemon=True).start()
+        self._show_solve_mode_modal(equation)
 
     @staticmethod
     def _friendly_error(equation: str, exc: Exception) -> str:
