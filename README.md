@@ -1,6 +1,6 @@
-# SymSolver
+# DualSolver
 
-SymSolver is a step-by-step linear equation solver that uses SymPy for symbolic computation. It helps students understand how equations are solved by displaying each algebraic step, from initial equation to final answer, through a chat-style Tkinter interface with animated solution trails, interactive graphs, and dark/light theming.
+DualSolver is a step-by-step linear equation solver that uses SymPy for symbolic computation. It helps students understand how equations are solved by displaying each algebraic step, from initial equation to final answer, through a chat-style Tkinter interface with animated solution trails, interactive graphs, and dark/light theming.
 
 ## Features
 
@@ -19,7 +19,7 @@ SymSolver is a step-by-step linear equation solver that uses SymPy for symbolic 
 
 ## Symbolic Computation
 
-SymSolver leverages **SymPy** for symbolic algebra — solving equations exactly (fractions, radicals), generating step-by-step breakdowns, detecting auto-simplifications, and validating linearity before solving.
+DualSolver leverages **SymPy** for symbolic algebra — solving equations exactly (fractions, radicals), generating step-by-step breakdowns, detecting auto-simplifications, and validating linearity before solving.
 
 The solver produces a **Standard Trail Format**: **GIVEN → METHOD → STEPS → FINAL ANSWER → VERIFICATION → GRAPH & ANALYSIS → SUMMARY**.
 
@@ -34,7 +34,7 @@ The solver produces a **Standard Trail Format**: **GIVEN → METHOD → STEPS �
 ## Project Structure
 
 ```
-SymSolver/
+DualSolver/
 ├── main.py                  # Entry point — launches the Tkinter app
 ├── requirements.txt         # Python dependencies (sympy, matplotlib, numpy, pillow)
 ├── README.md
@@ -45,7 +45,7 @@ SymSolver/
 │   └── lightmode-logo.png   # Logo for light theme
 │
 ├── data/
-│   └── symsolver.json       # Local storage (history, settings, preferences)
+│   └── dualsolver.json       # Local storage (history, settings, preferences)
 │
 ├── tests/
 │   ├── conftest.py          # Test config (matplotlib Agg backend)
@@ -62,7 +62,7 @@ SymSolver/
 │   └── graph.py             # Matplotlib graph builder + case analysis (820 lines)
 │
 └── gui/
-    ├── __init__.py          # Exports SymSolverApp
+    ├── __init__.py          # Exports DualSolverApp
     ├── app.py               # Main Tkinter window — chat-style interface (569 lines)
     ├── animation.py         # Step-by-step animation engine (464 lines)
     ├── widgets.py           # Reusable UI widget builders (200 lines)

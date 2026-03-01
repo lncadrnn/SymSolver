@@ -1,10 +1,10 @@
-""" SymSolver — Entry point. """
+""" DualSolver — Entry point. """
 
-from gui import SymSolverApp
+from gui import DualSolverApp
 
 
 def main() -> None:
-    app = SymSolverApp()
+    app = DualSolverApp()
     app.mainloop()
 
 

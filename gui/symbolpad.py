@@ -1,5 +1,5 @@
 """
-SymSolver — Symbol-pad mixin
+DualSolver — Symbol-pad mixin
 
 Floating popup with math-symbol buttons for fast input.
 """
@@ -11,7 +11,7 @@ from gui import themes
 
 
 class SymbolPadMixin:
-    """Mixed into SymSolverApp — adds the ⌨ symbol-pad popup."""
+    """Mixed into DualSolverApp — adds the ⌨ symbol-pad popup."""
 
     _SYMBOL_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
         ("Trig / Functions", [

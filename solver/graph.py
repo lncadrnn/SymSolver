@@ -1,5 +1,5 @@
 """
-Graph builder for SymSolver.
+Graph builder for DualSolver.
 
 Produces a dark-themed matplotlib Figure for embedding in the Tkinter GUI.
 Handles three equation types:

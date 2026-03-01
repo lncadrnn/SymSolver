@@ -1,1 +1,1 @@
-from .app import SymSolverApp
+from .app import DualSolverApp

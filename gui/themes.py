@@ -1,5 +1,5 @@
 """
-SymSolver — Colour / theme definitions
+DualSolver — Colour / theme definitions
 
 Immutable palette dicts and mutable module-level shortcuts that are updated
 by ``apply_theme()`` whenever the user toggles between dark and light mode.

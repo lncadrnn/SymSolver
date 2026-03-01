@@ -6,7 +6,7 @@ from gui import storage
 
 def _configure_tmp_db(monkeypatch, tmp_path: Path) -> Path:
     data_dir = tmp_path / "data"
-    data_file = data_dir / "symsolver.json"
+    data_file = data_dir / "dualsolver.json"
     monkeypatch.setattr(storage, "_DATA_DIR", str(data_dir))
     monkeypatch.setattr(storage, "_DATA_FILE", str(data_file))
     return data_file

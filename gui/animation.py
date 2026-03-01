@@ -1,5 +1,5 @@
 """
-SymSolver — Animation mixin
+DualSolver — Animation mixin
 
 Step-by-step animated rendering of solver results into the chat area.
 """
@@ -11,7 +11,7 @@ from gui import themes
 
 
 class AnimationMixin:
-    """Mixed into SymSolverApp — drives the queued step-by-step animation."""
+    """Mixed into DualSolverApp — drives the queued step-by-step animation."""
 
     # Class-level defaults (overridden at runtime via Settings)
     _TYPING_SPEED = 12          # ms per character
@@ -99,7 +99,7 @@ class AnimationMixin:
 
         bot = tk.Frame(self._chat_frame, bg=themes.BOT_BG, padx=18, pady=14)
         bot.pack(fill=tk.X, padx=20, pady=(4, 6))
-        tk.Label(bot, text="SymSolver", font=self._bold, bg=themes.BOT_BG,
+        tk.Label(bot, text="DualSolver", font=self._bold, bg=themes.BOT_BG,
                  fg=themes.ACCENT, anchor="w").pack(fill=tk.X)
 
         queue: list = []

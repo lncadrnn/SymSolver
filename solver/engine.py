@@ -1,4 +1,4 @@
-﻿"""SymSolver engine — dispatcher module.
+﻿"""DualSolver engine — dispatcher module.
 
 Routes to the symbolic (SymPy) or numerical (NumPy) solver based on
 the *mode* parameter.  Keeps backward-compatibility: calling

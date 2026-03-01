@@ -1,5 +1,5 @@
 """
-SymSolver — Widget helpers & graph/analysis mixin
+DualSolver — Widget helpers & graph/analysis mixin
 
 Reusable rendering primitives (section headers, cards, fraction widgets)
 and the collapsible graph + analysis panel.
@@ -12,7 +12,7 @@ from gui import themes
 
 
 class WidgetMixin:
-    """Mixed into SymSolverApp — UI building blocks and graph panel."""
+    """Mixed into DualSolverApp — UI building blocks and graph panel."""
 
     # Pattern to split on fraction markers ⟦numerator|denominator⟧
     _FRAC_RE = re.compile(r'⟦([^|⟧]+)\|([^⟧]+)⟧')

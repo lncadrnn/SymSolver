@@ -1,4 +1,4 @@
-from gui.app import SymSolverApp
+from gui.app import DualSolverApp
 import gui.app as app_module
 import main as entry
 
@@ -42,10 +42,10 @@ class _FakeTk:
 
 
 def test_friendly_error_for_parse_and_generic() -> None:
-    msg_parse = SymSolverApp._friendly_error("2x +", ValueError("Could not parse expression"))
+    msg_parse = DualSolverApp._friendly_error("2x +", ValueError("Could not parse expression"))
     assert "Could not understand" in msg_parse
 
-    msg_generic = SymSolverApp._friendly_error("2x+1=0", RuntimeError("boom"))
+    msg_generic = DualSolverApp._friendly_error("2x+1=0", RuntimeError("boom"))
     assert "could not process" in msg_generic.lower()
     assert "Details: boom" in msg_generic
 
@@ -72,7 +72,7 @@ def test_show_error_ui_path_does_not_crash(monkeypatch) -> None:
     fake_app = _FakeApp()
     loading = _FakeLoading()
 
-    SymSolverApp._show_error(fake_app, "Invalid equation", loading)
+    DualSolverApp._show_error(fake_app, "Invalid equation", loading)
 
     assert loading.destroyed is True
     assert fake_app.input_state is True
@@ -86,6 +86,6 @@ def test_main_entry_runs_app(monkeypatch) -> None:
         def mainloop(self):
             called["mainloop"] = True
 
-    monkeypatch.setattr(entry, "SymSolverApp", DummyApp)
+    monkeypatch.setattr(entry, "DualSolverApp", DummyApp)
     entry.main()
     assert called["mainloop"] is True

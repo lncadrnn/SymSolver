@@ -1,5 +1,5 @@
 """
-SymSolver — Full-page settings mixin
+DualSolver — Full-page settings mixin
 
 Renders the settings overlay that replaces the chat view.
 """
@@ -11,7 +11,7 @@ from gui import themes
 
 
 class SettingsMixin:
-    """Mixed into SymSolverApp — full-page settings panel."""
+    """Mixed into DualSolverApp — full-page settings panel."""
 
     def show_settings_page(self) -> None:
         """Replace chat content with a full-page settings view."""

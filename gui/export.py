@@ -1,5 +1,5 @@
 """
-SymSolver — Export / clipboard mixin
+DualSolver — Export / clipboard mixin
 
 Provides PDF export (with embedded graph) and plain-text clipboard copy.
 """
@@ -13,7 +13,7 @@ from gui import themes
 
 
 class ExportMixin:
-    """Mixed into SymSolverApp — adds copy-to-clipboard and PDF export."""
+    """Mixed into DualSolverApp — adds copy-to-clipboard and PDF export."""
 
     # ── Fraction normaliser (used by plain text and PDF) ───────────────
 
@@ -28,7 +28,7 @@ class ExportMixin:
         """Convert a solver result dict into a readable plain-text trail."""
         lines: list[str] = []
         lines.append("=" * 56)
-        lines.append("  SymSolver — Solution Trail")
+        lines.append("  DualSolver — Solution Trail")
         lines.append("=" * 56)
 
         # GIVEN
@@ -145,7 +145,7 @@ class ExportMixin:
         path = filedialog.asksaveasfilename(
             title="Save Solution as PDF",
             defaultextension=".pdf",
-            initialfile=f"SymSolver_{safe}",
+            initialfile=f"DualSolver_{safe}",
             filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")],
         )
         if not path:
@@ -192,7 +192,7 @@ class ExportMixin:
         # ── Title ───────────────────────────────────────────────────
         pdf.set_font(_font, "B", 20)
         pdf.set_text_color(26, 140, 255)
-        pdf.cell(0, 12, "SymSolver - Solution Trail", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 12, "DualSolver - Solution Trail", new_x="LMARGIN", new_y="NEXT")
         pdf.set_draw_color(26, 140, 255)
         pdf.line(10, pdf.get_y(), 200, pdf.get_y())
         pdf.ln(6)

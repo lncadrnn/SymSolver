@@ -1,5 +1,5 @@
 """
-SymSolver — Sidebar panel (hamburger menu).
+DualSolver — Sidebar panel (hamburger menu).
 
 ChatGPT-style sidebar with history logs, settings link, and three-dot menus.
 No login/register — all history is stored locally for everyone.
@@ -256,10 +256,10 @@ class Sidebar:
             self._sidebar_logo_photo = ImageTk.PhotoImage(img)
             tk.Label(top, image=self._sidebar_logo_photo,
                      bg=c["bg"]).pack(side=tk.LEFT)
-            tk.Label(top, text="SymSolver", font=self._font_title,
+            tk.Label(top, text="DualSolver", font=self._font_title,
                      bg=c["bg"], fg=c["fg"]).pack(side=tk.LEFT, padx=(6, 0))
         except Exception:
-            tk.Label(top, text="SymSolver", font=self._font_title,
+            tk.Label(top, text="DualSolver", font=self._font_title,
                      bg=c["bg"], fg=c["accent"]).pack(side=tk.LEFT)
 
         tk.Button(top, text="✕", font=self._font_icon, bg=c["bg"], fg=c["dim"],
@@ -270,7 +270,7 @@ class Sidebar:
         menu = tk.Frame(self._inner, bg=c["bg"])
         menu.pack(fill=tk.X, padx=12, pady=(10, 0))
 
-        self._make_menu_button(menu, "💬  SymSolver", self._new_chat)
+        self._make_menu_button(menu, "💬  DualSolver", self._new_chat)
         self._make_menu_button(menu, "⚙  Settings", self._open_settings)
         self._make_menu_button(menu, "📦  Archived", lambda: self._go_page("archived"))
 

@@ -1,4 +1,4 @@
-# How SymSolver Parses and Solves Linear Equations
+# How DualSolver Parses and Solves Linear Equations
 
 I'll walk you through the entire process using **`2x + 2 = 5`** as the primary example, with a secondary example **`2x + 5x + 3 = 1 + 5`** to show how like-term combining works. Additional sections cover multi-variable equations, systems of equations, non-linear detection, graphing, theming, and the animated trail rendering pipeline.
 
@@ -716,7 +716,7 @@ Clicking "☀ Light" / "🌙 Dark" in the header triggers `_toggle_theme()`:
 
 ### 14.3 Logo Loading
 
-The header logo is loaded from `assets/darkmode-logo.png` or `assets/lightmode-logo.png` via Pillow. If Pillow is unavailable or the image is missing, a text label ("SymSolver") is shown as a fallback.
+The header logo is loaded from `assets/darkmode-logo.png` or `assets/lightmode-logo.png` via Pillow. If Pillow is unavailable or the image is missing, a text label ("DualSolver") is shown as a fallback.
 
 ---
 

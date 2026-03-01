@@ -1,7 +1,7 @@
 """
-SymSolver — Local JSON storage for history and settings.
+DualSolver — Local JSON storage for history and settings.
 
-Data is persisted in ``<project>/data/symsolver.json``.
+Data is persisted in ``<project>/data/dualsolver.json``.
 All data is local — no user accounts required.
 """
 
@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime
 
 _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
-_DATA_FILE = os.path.join(_DATA_DIR, "symsolver.json")
+_DATA_FILE = os.path.join(_DATA_DIR, "dualsolver.json")
 
 # ── Default settings ────────────────────────────────────────────────────
 DEFAULT_SETTINGS = {

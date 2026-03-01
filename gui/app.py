@@ -1,5 +1,5 @@
 """
-SymSolver — Tkinter GUI
+DualSolver — Tkinter GUI
 
 A chat-style interface for solving linear equations step-by-step.
 Dark theme, scrollable solution area, and collapsible explanations.
@@ -24,7 +24,7 @@ from gui.symbolpad import SymbolPadMixin
 from gui.settings import SettingsMixin
 
 
-class SymSolverApp(
+class DualSolverApp(
     AnimationMixin,
     WidgetMixin,
     ExportMixin,
@@ -36,7 +36,7 @@ class SymSolverApp(
 
     def __init__(self) -> None:
         super().__init__()
-        self.title("SymSolver — Linear Equation Solver")
+        self.title("DualSolver — Linear Equation Solver")
         self.geometry("1000x850")
         self.minsize(680, 600)
         self.configure(bg=themes.BG)
@@ -327,7 +327,7 @@ class SymSolverApp(
                             bg=themes.HEADER_BG)
         except Exception as e:
             print(f"Could not load logo: {e}")
-            return tk.Label(self._header, text="SymSolver", font=self._title,
+            return tk.Label(self._header, text="DualSolver", font=self._title,
                             bg=themes.HEADER_BG, fg=themes.ACCENT)
 
     def _refresh_header_logo(self):
@@ -484,7 +484,7 @@ class SymSolverApp(
         self._welcome_frame.pack(fill=tk.BOTH, expand=True, pady=(100, 50))
 
         tk.Label(
-            self._welcome_frame, text="Welcome to SymSolver",
+            self._welcome_frame, text="Welcome to DualSolver",
             font=self._title, bg=themes.BG, fg=themes.TEXT_BRIGHT,
         ).pack(pady=(8, 2))
         tk.Label(
@@ -716,7 +716,7 @@ class SymSolverApp(
                 )
             return msg
         return (
-            f'SymSolver could not process "{equation}".\n\n'
+            f'DualSolver could not process "{equation}".\n\n'
             "Supports linear equations with one or more variables,\n"
             "and systems separated by commas or semicolons.\n"
             "Examples:  2x + 3 = 7  \u2022  2x + 4y = 1  \u2022  x+y=10, x-y=2\n\n"
@@ -849,7 +849,7 @@ class SymSolverApp(
 
 
 def main() -> None:
-    app = SymSolverApp()
+    app = DualSolverApp()
     app.mainloop()
 
 

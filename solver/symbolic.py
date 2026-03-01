@@ -27,7 +27,7 @@ TRANSFORMATIONS = standard_transformations + (
     rationalize,  # Convert decimals like "12.5" to exact Rational(25, 2)
 )
 
-# Letters that SymSolver will recognise as the unknown variable.
+# Letters that DualSolver will recognise as the unknown variable.
 _ALLOWED_VARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 
