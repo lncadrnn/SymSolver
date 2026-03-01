@@ -52,10 +52,13 @@ from solver.symbolic import (                         # noqa: F401
 )
 
 from solver.numerical import solve_numeric as _solve_numeric
+from solver.substitution import solve_substitution as _solve_substitution
 
 
-def solve_linear_equation(equation_str: str, *, mode: str = "symbolic") -> dict:
-    """Solve a linear equation either symbolically or numerically.
+def solve_linear_equation(equation_str: str, *, mode: str = "symbolic",
+                          values_str: str = "") -> dict:
+    """Solve a linear equation either symbolically or numerically,
+    or verify it via substitution.
 
     Parameters
     ----------
@@ -64,8 +67,13 @@ def solve_linear_equation(equation_str: str, *, mode: str = "symbolic") -> dict:
     mode : str, optional
         ``"symbolic"`` (default) — exact answer via SymPy.
         ``"numerical"`` — decimal approximation via NumPy.
+        ``"substitution"`` — substitute given values and check.
+    values_str : str, optional
+        Variable assignments for substitution mode (e.g. ``"x = 3, y = 4"``).
     """
-    if mode == "numerical":
+    if mode == "substitution":
+        result = _solve_substitution(equation_str, values_str)
+    elif mode == "numerical":
         result = _solve_numeric(equation_str)
     else:
         result = _solve_symbolic(equation_str)
@@ -73,8 +81,12 @@ def solve_linear_equation(equation_str: str, *, mode: str = "symbolic") -> dict:
     # Inject computation type into the "given" section so the solution
     # trail shows which mode was used.
     if "given" in result and "inputs" in result["given"]:
-        label = ("Numerical (NumPy)" if mode == "numerical"
-                 else "Symbolic (SymPy)")
+        if mode == "substitution":
+            label = "Substitution (SymPy)"
+        elif mode == "numerical":
+            label = "Numerical (NumPy)"
+        else:
+            label = "Symbolic (SymPy)"
         result["given"]["inputs"]["computation"] = label
 
     return result

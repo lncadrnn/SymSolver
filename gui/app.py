@@ -573,6 +573,90 @@ class DualSolverApp(
             modal.destroy()
             self._solve_with_mode(equation, mode)
 
+        def _pick_substitution():
+            """Switch modal to show the values input for substitution."""
+            # Clear existing inner content
+            for child in inner.winfo_children():
+                child.destroy()
+
+            tk.Label(inner, text="Substitution Mode",
+                     font=title_font, bg=p["STEP_BG"],
+                     fg=p["TEXT_BRIGHT"]).pack(pady=(0, 4))
+
+            # Show equation
+            tk.Label(inner, text="Equation:", font=small_font,
+                     bg=p["STEP_BG"], fg=p["TEXT_DIM"],
+                     anchor="w").pack(fill=tk.X, pady=(8, 2))
+            eq_display2 = equation.replace('pi', 'π')
+            tk.Label(inner, text=eq_display2, font=self._mono,
+                     bg=p["BG_DARKER"], fg=p["ACCENT"],
+                     padx=12, pady=8, anchor="w",
+                     relief=tk.FLAT).pack(fill=tk.X, pady=(0, 12))
+
+            # Values input
+            tk.Label(inner, text="Enter variable values:",
+                     font=small_font, bg=p["STEP_BG"],
+                     fg=p["TEXT_DIM"], anchor="w").pack(fill=tk.X, pady=(0, 2))
+            tk.Label(inner, text="e.g.  x = 3   or   x = 3, y = 4",
+                     font=tkfont.Font(family="Segoe UI", size=10),
+                     bg=p["STEP_BG"], fg=p["TEXT_DIM"],
+                     anchor="w").pack(fill=tk.X, pady=(0, 6))
+
+            val_entry_frame = tk.Frame(inner, bg=p["INPUT_BG"],
+                                        highlightbackground=p["ACCENT"],
+                                        highlightthickness=2, bd=0)
+            val_entry_frame.pack(fill=tk.X, pady=(0, 6))
+
+            val_var = tk.StringVar()
+            val_entry = tk.Entry(
+                val_entry_frame, font=self._mono, bg=p["INPUT_BG"],
+                fg=p["TEXT_BRIGHT"], insertbackground=p["TEXT_BRIGHT"],
+                bd=0, relief=tk.FLAT, textvariable=val_var,
+            )
+            val_entry.pack(fill=tk.X, padx=10, pady=8)
+            val_entry.focus_set()
+
+            # Error label (hidden initially)
+            error_lbl = tk.Label(inner, text="", font=small_font,
+                                 bg=p["STEP_BG"], fg=p["ERROR"],
+                                 anchor="w", wraplength=350)
+            error_lbl.pack(fill=tk.X, pady=(0, 4))
+
+            def _submit_substitution(*_args):
+                values = val_var.get().strip()
+                if not values:
+                    error_lbl.configure(text="Please enter variable values.")
+                    return
+                backdrop.destroy()
+                modal.destroy()
+                self._solve_with_mode(equation, "substitution",
+                                      values_str=values)
+
+            val_entry.bind("<Return>", _submit_substitution)
+
+            # Buttons row
+            btn_row = tk.Frame(inner, bg=p["STEP_BG"])
+            btn_row.pack(fill=tk.X, pady=(8, 0))
+
+            tk.Button(btn_row, text="← Back", font=small_font,
+                      bg=p["STEP_BG"], fg=p["TEXT_DIM"],
+                      activebackground=p["STEP_BG"],
+                      activeforeground=p["TEXT_BRIGHT"],
+                      bd=0, cursor="hand2",
+                      command=lambda: (backdrop.destroy(), modal.destroy(),
+                                       self._show_solve_mode_modal(equation))
+                      ).pack(side=tk.LEFT)
+
+            check_btn = tk.Button(
+                btn_row, text="Check ➤", font=btn_font,
+                bg=p["ACCENT"], fg="#ffffff",
+                activebackground=p["ACCENT_HOVER"],
+                activeforeground="#ffffff",
+                bd=0, padx=18, pady=6, cursor="hand2",
+                command=_submit_substitution,
+            )
+            check_btn.pack(side=tk.RIGHT)
+
         def _cancel():
             backdrop.destroy()
             modal.destroy()
@@ -582,7 +666,7 @@ class DualSolverApp(
 
         icon_font = tkfont.Font(family="Segoe UI Emoji", size=16)
 
-        def _make_option_card(parent, icon, title, subtitle, mode):
+        def _make_option_card(parent, icon, title, subtitle, on_click_fn):
             """Build a fully-clickable option card with whole-box hover."""
             border = tk.Frame(parent, bg=p["ACCENT"],
                               highlightbackground=p["ACCENT"],
@@ -627,7 +711,7 @@ class DualSolverApp(
                 sub_lbl.configure(fg=p["TEXT_DIM"])
 
             def _on_click(_evt):
-                _pick(mode)
+                on_click_fn()
 
             for w in all_widgets:
                 w.bind("<Enter>", _on_enter)
@@ -642,14 +726,21 @@ class DualSolverApp(
         _make_option_card(
             btns, "📐", "Symbolic Computation",
             "Exact answers — fractions, radicals, π  (SymPy)",
-            "symbolic",
+            lambda: _pick("symbolic"),
         )
 
         # Numerical option
         _make_option_card(
             btns, "🔢", "Numerical Computation",
             "Decimal approximations — floating-point  (NumPy)",
-            "numerical",
+            lambda: _pick("numerical"),
+        )
+
+        # Substitution option
+        _make_option_card(
+            btns, "🔄", "Substitution Mode",
+            "Plug in values to check if the equation holds  (SymPy)",
+            _pick_substitution,
         )
 
         # Cancel link
@@ -665,7 +756,8 @@ class DualSolverApp(
         modal.bind("<Escape>", lambda _: _cancel())
         modal.focus_set()
 
-    def _solve_with_mode(self, equation: str, mode: str) -> None:
+    def _solve_with_mode(self, equation: str, mode: str,
+                         values_str: str = "") -> None:
         """Run the solve pipeline with the chosen mode."""
         if not (self._PHASE_PAUSE == 0 and self._TYPING_SPEED == 0):
             self._auto_scroll = True
@@ -676,13 +768,19 @@ class DualSolverApp(
         self._entry.delete(0, tk.END)
         self._set_input_state(False)
 
-        self._add_user_message(equation)
+        # For substitution mode, show both equation and values in the user bubble
+        if mode == "substitution" and values_str:
+            display_text = f"{equation}    [  {values_str}  ]"
+        else:
+            display_text = equation
+        self._add_user_message(display_text)
         loading_label = self._add_loading()
 
         gen = self._solve_gen
         def _solve():
             try:
-                result = solve_linear_equation(equation, mode=mode)
+                result = solve_linear_equation(equation, mode=mode,
+                                               values_str=values_str)
                 self.after(0, lambda: self._show_result(result, loading_label)
                            if self._solve_gen == gen else None)
             except Exception as exc:

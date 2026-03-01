@@ -104,6 +104,10 @@ class AnimationMixin:
 
         queue: list = []
 
+        # Detect substitution mode — trimmed trail (no method/verification/graph)
+        _method_name = result.get("method", {}).get("name", "")
+        _is_substitution = _method_name == "Substitution Check"
+
         # ── GIVEN ──────────────────────────────────────────────────
         given = result.get("given", {})
         def _render_given():
@@ -112,13 +116,14 @@ class AnimationMixin:
                 bot, given, result, status))
         queue.append(_render_given)
 
-        # ── METHOD ─────────────────────────────────────────────────
-        method = result.get("method", {})
-        def _render_method():
-            status = self._show_status(bot, "Determining Approach...")
-            self._phase_then(status, lambda: self._animate_method(
-                bot, method, status))
-        queue.append(_render_method)
+        # ── METHOD (skip for substitution) ─────────────────────────
+        if not _is_substitution:
+            method = result.get("method", {})
+            def _render_method():
+                status = self._show_status(bot, "Determining Approach...")
+                self._phase_then(status, lambda: self._animate_method(
+                    bot, method, status))
+            queue.append(_render_method)
 
         # ── STEPS ──────────────────────────────────────────────────
         for step in result["steps"]:
@@ -143,8 +148,8 @@ class AnimationMixin:
                 educational=_is_educational))
         queue.append(_render_answer)
 
-        # ── VERIFICATION ───────────────────────────────────────────
-        if result.get("verification_steps"):
+        # ── VERIFICATION (skip for substitution) ───────────────────
+        if not _is_substitution and result.get("verification_steps"):
             v_steps = result["verification_steps"]
             def _render_verify():
                 status = self._show_status(bot, "Verifying final answer...")
@@ -152,9 +157,8 @@ class AnimationMixin:
                     bot, v_steps, status))
             queue.append(_render_verify)
 
-        # ── GRAPH (skip for non-linear) ────────────────────────────
-        _method_name = result.get("method", {}).get("name", "")
-        if "Linearity Check" not in _method_name:
+        # ── GRAPH (skip for non-linear and substitution) ───────────
+        if not _is_substitution and "Linearity Check" not in _method_name:
             def _render_graph():
                 self._animate_graph(bot, result)
             queue.append(_render_graph)
